@@ -10,6 +10,7 @@ $fa = 0+3;
 $fs = 0+0.3;
 
 // additional global constants
+$inf = 1/0; // infinity
 $debug = false;
 
 // ====================================================================
@@ -18,6 +19,9 @@ $debug = false;
 
 // truncate number (or array of numbers) to d decimal places
 function trunc(n, d=2) = let(s=pow(10,d)) is_list(n) ? [for(i=n) floor(i*s)/s] : floor(n*s)/s;
+
+// round n to the nearest multiple of d
+function mof(n, d=2) = round(n/d)*d;
 
 // hyperbolic functions
 function sinh(t) = (exp(t)-exp(-t))/2;
@@ -33,8 +37,8 @@ function comb(n, r) = r==1 ? n : comb(n-1, r-1) * n / r;
 // geometric inversion
 function inv(p, r) = p*(r*r)/(p*p);
 
-// length of perimeter of an ellipse (approximation only): x, y are major/minor axes (similar to radius)
-function perimeter(x, y) = let(d=x-y, s=x+y, h=d*d/s/s) PI*s*(1+h/4+h*h/64+h*h*h/256+25*h*h*h*h/16384);
+// length of perimeter of an ellipse (approximation only): rx, ry are major/minor axes (radius)
+function perimeter(rx, ry) = let(ry=ifundef(ry, rx), x=abs(rx), y=abs(ry)) x*y==0 ? 0 : let(d=x-y, s=x+y, h=d*d/s/s) abs(d)<1e-3 ? 2*PI*x : PI*s*(1+h/4+h*h/64+h*h*h/256+25*h*h*h*h/16384);
 
 // golden ratio (phi)
 function golden() = 2/(sqrt(5)-1);
@@ -58,12 +62,15 @@ function curb(n, k, min=0) = n<min ? min : k && n>=k ? k-1 : n;
 // constraint real number a to the range [min,max]
 function confine(a, min=0, max=1) = a<min ? min : a>max ? max : a;
 
+// derive fa variable that divides 45º evenly for an ellipse, rx,ry=axes, s=max segment length
+function _fa(rx, ry, s=$fs) = max(45/floor(perimeter(rx, ifundef(ry, rx))/8/s), 45/ceil(45/$fa));
+
 // derive fn variable based on radius - should be same as system-derived $fn except minimum is 8 instead of 5
-function _fn(r) = $fn ? $fn : ceil(max(min(360/$fa, abs(r)*2*PI/$fs), 8));
+function _fn(r, n=8) = $fn ? $fn : ceil(max(min(360/$fa, abs(r)*2*PI/$fs), n));
 
 // lower resolution versions of _fn()
-function _fn2(r) = $fn ? $fn : ceil(max(min(360/$fa, abs(r)*2*PI/$fs)/2, 8));
-function _fn3(r) = $fn ? $fn : ceil(max(min(360/$fa, abs(r)*2*PI/$fs)/3, 8));
+function _fn2(r, n=8) = $fn ? $fn : ceil(max(min(360/$fa, abs(r)*2*PI/$fs)/2, n));
+function _fn3(r, n=8) = $fn ? $fn : ceil(max(min(360/$fa, abs(r)*2*PI/$fs)/3, n));
 
 // check if a is defined
 function has(a) = (a!=undef);
@@ -90,10 +97,10 @@ function interp(a, b, s) = a*(1-s) + b*s;
 function almost(a, b, d) = let(s=d/norm(a-b)) a*(1-s) + b*s;
 
 // for handling array type arguments: (1) wrap around if too short (2) accept scalar (3) provide default
-function opt(a, idx, df) = is_list(a) ? around(a, idx) : (a==undef ? df : a);
+function opt(a, idx, df) = is_list(a) ? ifundef(around(a, idx), df) : (a==undef ? df : a);
 
 // generate and echo a random integer seed only if undefined
-function rnd_seed(seed) = seed==undef ? let(s=floor(rands(1000, 9999, 1)[0])) echo(str("seed=", strc(s))) s : seed;
+function rnd_seed(seed) = seed!=undef ? seed : tee(floor(rands(1000, 9999, 1)[0]), "seed", $debug);
 
 // random function that can handle undef seed (workaround for rands() returning undef if seed is undef)
 function rnd(min=0, max=1, dim=0, seed) = let(s=rnd_seed(seed), d=ceil(dim), r=rands(min, max, max(1,d), s)) d>0 ? r : r[0];
@@ -103,6 +110,9 @@ function rndi(min, max, seed) = floor(rnd(ifundef(min, 0), ifundef(max, 99)+1, 1
 
 // random float of range (min,max) exclusive(?), default is (0,1)
 function rndf(min, max, seed) = rnd(ifundef(min, 0), ifundef(max, 1), 1, seed)[0];
+
+// random 3D unit vector
+function rndv() = unit(rands(-1, 1, 3));
 
 // normalize a vector
 function unit(v) = let(n=norm(v)) n==0 ? v : v/n;
@@ -130,11 +140,13 @@ function strn(a, i=0) = is_list(a) ? i>=len(a) ? "\n" : str("\n", i, ": ", a[i],
 // array manipulations
 // ====================================================================
 
-// return the dimension of array, e.g. dim(undef) = 0, dim(1) = 0, dim([1]) = 1, dim([[1]]) = 2, dim([1,2,3]) = 1
-function dim(array, d=0) = is_list(array) ? dim(array[0], d+1) : d;
+// return the rank of array, e.g. rank(undef) = 0, rank(1) = 0, rank([1]) = 1, rank([[1]]) = 2, rank([1,2,3]) = 1
+function rank(array, i=0) = is_list(array) ? rank(array[0], i+1) : i;
 
-// return a range of the indices
-function index(array) = [0:len(array)-1];
+// return a range of ascending/descending indices
+function incline(array) = [0:len(array)-1];
+function decline(array) = [len(array)-1:-1:0];
+function indices(array, invert=false) = invert ? [len(array)-1:-1:0] : [0:len(array)-1];
 
 // return individual indices of an array, less=skip some at the end
 function keys(array, less=0) = let(k=len(array)-less) k>0 ? [for (i=[0:k-1]) i] : [];
@@ -149,8 +161,8 @@ function contains(array, e) = len(search(e, array)) > 0;
 // ensure e is a list (array)
 function enlist(e) = is_list(e) ? e : [e];
 
-// if an array, change length by trimming or padding; if a scalar, convert to a single element array
-function rank(array, n, pad=0) = n>0 ? let(a=enlist(array)) [for (i=[0:n-1]) ifundef(a[i], pad)] : [];
+// if an array, change length to n by trimming or padding; otherwise, convert to an array of length n
+function redim(array, n, pad=0) = n>0 ? let(a=enlist(array)) [for (i=[0:n-1]) ifundef(a[i], pad)] : [];
 
 // get element by wrapping around index
 function around(array, idx) = array[mod(idx, len(array))];
@@ -193,10 +205,10 @@ function every(array, n=1, s=0, center=false) = n==1 && s==0 ? array : let(k=len
 function swap(array, i, j) = [for (k=[0:len(array)-1]) array[k==i?j:k==j?i:k]];
 
 // replace one element
-function override(array, idx, value) = [for (i=keys(array)) i == idx ? value : array[i]];
+function override(array, idx, value) = [for (i=incline(array)) i == idx ? value : array[i]];
 
 // offset one element by delta amount
-function plus(array, idx, delta) = [for (i=keys(array)) i == idx ? array[i]+delta : array[i]];
+function plus(array, idx, delta) = [for (i=incline(array)) i == idx ? array[i]+delta : array[i]];
 
 // negate one element
 function negate(array, idx) = override(array, idx, -array[idx]);
@@ -235,22 +247,16 @@ function minmax(array) = [min(array),max(array)];
 function span(array) = max(array) - min(array);
 
 // offset all elements by same amount
-function shift(array, by) = [for (i=keys(array)) array[i]+(is_list(by)?by[i]:by)];
+function shift(array, by) = [for (i=incline(array)) array[i]+(is_list(by)?by[i]:by)];
 
 // scale all elements by ratio, if ratio is a list then scale respectively (expects same length as array)
-function zoom(array, ratio) = [for (i=keys(array)) array[i]*(is_list(ratio)?ratio[i]:ratio)];
+function zoom(array, ratio) = [for (i=incline(array)) array[i]*(is_list(ratio)?ratio[i]:ratio)];
 
 // apply one factor per dimension, e.g. shear(array, [1,-1]) will reflect 2D points along y-axis
-function shear(array, factors) = [for (e=array) [for (i=index(e)) e[i]*factors[i]]];
+function shear(array, factors) = [for (e=array) [for (i=incline(e)) e[i]*factors[i]]];
 
 // unique pairs of all elements (use range to filter out pairs too far apart)
 function pairs(array, range=0) = let(k=len(array)-1) [for (i=[0:k], j=[0:k]) if (i>j && (range==0||range>abs(i-j))) [array[i],array[j]]];
-
-// list adjacent duplicates
-function seams(array, loop=false) = let(k=len(array)) [for (i=[0:k-(loop?1:2)]) if (array[i]==array[(i+1)%k]) i];
-
-// eliminate adjacent duplicates (private: i, q)
-function fuse(array, i, q) = let(i=ifundef(i, len(array)-1), q=ifundef(q, array[0]), e=array[i]) i<0 ? [] : concat(fuse(array, i-1, e), norm(e-q)<0.01 ? [] : [e]);
 
 // ====================================================================
 // 3D path functions
@@ -259,21 +265,36 @@ function fuse(array, i, q) = let(i=ifundef(i, len(array)-1), q=ifundef(q, array[
 // check if a path looks like a loop with evenly spaced points
 function loopish(path) = let(n=len(path)-1) n>3 && norm(path[n]-path[0])<min(norm(path[n]-path[n-1]),norm(path[1]-path[0]))*2;
 
-// close the loop of a path
+// append first point to the end if not already there
 function close_loop(path, enable=true) = enable && path[0]!=path[len(path)-1] ? concat(path, [path[0]]) : path;
 
-// remove last element if it's the same as the first
+// remove last point if it's the same as the first
 function unloop(path, enable=true) = enable ? let(k=len(path)-1) path[0]==path[k] ? [for (i=[0:k-1]) path[i]] : path : path;
 
+// align path so that segment i is colinear with vector v (default to z-axis)
+function plumb(path, i=0, v=[0,0,1]) = let(k=len(path), i=(i+k)%k) (k<2||i>k-2) ? path : path * m3_rotate(v, path[i+1]-path[i]);
+
+// list indices of adjacent duplicate points, e=threshold
+function seams(path, loop=false, e=0.01) = let(k=len(path)) [for (i=[0:k-(loop?1:2)]) if (norm(path[i]-path[(i+1)%k])<=e) i];
+
+// eliminate adjacent duplicate points, e=threshold [private: i, q, f]
+function fuse(path, loop=false, e=0.01, i, q, f) = let(i=ifundef(i, len(path)-1), q=ifundef(q, loop?path[0]:undef), p=path[i], d=!q||norm(p-q)>e) i==0 ? [if (d||!f) p] : concat(fuse(path, loop, e, i-1, p, d?1:f), d?[p]:[]);
+
 // extend a path by adding length h to head and t to tail at consistent directions
-function elong(path, h=1, t=1) = let(k=len(path)) k<2 ? path : let(v1=path[0]-path[1], v2=path[k-1]-path[k-2], n1=norm(v1), n2=norm(v2)) concat([path[1]+v1*(n1+h)/n1], [for (i=[1:k-2]) path[i]], [path[k-2]+v2*(n2+t)/n2]);
+function elong(path, h=1, t=1) = let(k=len(path)) k<2 || (h==0 && t==0) ? path : let(v1=path[0]-path[1], v2=path[k-1]-path[k-2], n1=norm(v1), n2=norm(v2)) concat([path[1]+v1*(n1+h)/n1], [for (i=[1:k-2]) path[i]], [path[k-2]+v2*(n2+t)/n2]);
+
+// a list of accumulated lengths along path for each point + last entry is the total length as a loop
+function mileage(path, i=0, s=0) = let(k=len(path)) i>k ? [] : concat([s], mileage(path, i+1, s+norm(path[(i+1)%k]-path[i%k])));
+
+// find minimum and maximum segment lengths in path
+function seg_length(path, i=0, b, t) = i>len(path)-2 ? [b,t] : let(s=norm(path[i+1]-path[i])) seg_length(path, i+1, b==undef ? s : min(b, s), t==undef ? s : max(t, s)); 
 
 // calculate total length of a path in 3D space
 function path_length(path, i=0) = i>=len(path)-1 ? 0 : norm(path[i+1]-path[i]) + path_length(path, i+1);
 
 // like lookup() but for both 2D and 3D paths (non-proportional/snaps to existing points) 
 // t in [0,1), e = snap threshold, disable if zero
-function path_lookup(path, t, e=0) = let(k=len(path), n=k-1, i=floor(t*n), j=t*n-i) i<0||i>=n||j<e ? path[curb(i,k)] : path[i] + j*(path[i+1]-path[i]);
+function path_lookup(path, t, loop=false, e=0) = let(p=close_loop(path, loop), k=len(p), n=k-1, i=floor(t*n), j=t*n-i) i<0||i>=n||j<e ? p[curb(i,k)] : p[i] + j*(p[i+1]-p[i]);
 
 // find array index (as a real number) along path where distance is d
 // e.g. return 1.25 if path is [[0,0],[10,0],[30,0]] and d=15; 2 if d=30; or undef if d<0 or d>30
@@ -285,41 +306,41 @@ function path_concat(paths=[], i=0) = i>=len(paths) ? [] : let(p=paths[i]) conca
 // shorten length of path by at least d, rounded off to the nearest vertex
 function shorten(path, d=0, i=0) = d>0 && i<len(path) ? shorten(path, d-norm(path[i]-path[i+1]), i+1) : snip(path, i);
 
-// increase number of points to n for a looping profile (may not preserve original points), n defaults to doubling
-function oversample(path, n) = let(k=len(path), n=ifundef(n, k*2), m=max(k,n)) k>=n ? path : [let(p=close_loop(path)) for (t=quanta(m)) path_lookup(p, t, k/m/2)];
+// resample path to increase or decrease number of points to n
+function resample(path, n, loop=true) = let(n=ifundef(n, len(path))) n<=0 ? path : let(q=close_loop(path, enable=loop), k=len(q), mg=mileage(q), d=len(q[0]), mp=[for (j=[0:d-1]) [for (i=[0:k-1]) [mg[i], q[i][j]]]]) [for (t=quanta(n, max=mg[k-1])) [for (s=[0:d-1]) lookup(t, mp[s])]];
 
 // create a straight path between two points with equal-length segments shorter than or equal to ds {see ruler_path()}
-function segmentize(p1, p2, ds) = let(v=p2-p1, m=ceil(norm(v)/ds)) [for (t=quanta(m)) p1+t*v];
+function bridge(p1, p2, ds) = let(v=p2-p1, m=ceil(norm(v)/ds)) [for (t=quanta(m)) p1+t*v];
 
 // preserving cardinal, polish a path by taking average of neighbouring points, r=neighbourhood range (+/-r)
-//function polish(path, r=3, loop=true) = r<1 ? path : [for (i=keys(path)) avg(nearby(path, i, r, loop=loop))];
-function polish(path, r=1, loop=true) = r<1 ? path : [for (i=keys(path)) let(s=nearby(path, i, r, loop), u=s[0]-s[1], v=s[2]-s[1], d=abs(u*v)/(u*u)/(v*v)) avg(nearby(path, i, r+confine(ceil(d*2), 0, 0), loop=loop))];
+function polish(path, r=1, loop=true) = r<1 ? path : [for (i=incline(path)) let(s=nearby(path, i, r, loop), u=s[0]-s[1], v=s[2]-s[1], d=abs(u*v)/(u*u)/(v*v)) avg(nearby(path, i, r+confine(ceil(d*2), 0, 0), loop=loop))];
 
 // refine a path by subdividing long segments into ones shorter than ds, preserving original points
-function refine(path, ds, loop) = let(ds=ifundef(ds, $fs*4)) ds<0.02 ? path : let(loop=ifundef(loop, loopish(path)), p=close_loop(path, loop), k=len(p)-1) snip(flatten([for (i=[0:k]) i==k ? [p[k]] : let(l=norm(p[i+1]-p[i])) l<=ds ? [p[i]] : segmentize(p[i], p[i+1], ds)]), loop?1:0);
+function refine(path, ds, loop) = let(ds=ifundef(ds, $fs*4)) ds<0.02 ? path : let(loop=ifundef(loop, loopish(path)), p=close_loop(path, loop), k=len(p)-1) snip([for (i=[0:k]) each i==k ? [p[k]] : let(l=norm(p[i+1]-p[i])) l<=ds ? [p[i]] : bridge(p[i], p[i+1], ds)], loop?1:0);
 
 // simplify a path by removing points until each segment length is roughly ds
-function coarse(path, ds=1, loop=true, i=0) = i<len(path) ? let(j=path_where(path, ds, i)) j==undef ? (loop ? (norm(path[i]-path[0])>ds*0.65 ? [path[i]] : []) : [last(path)]) : concat([path[i]], coarse(path, ds, loop, max(i+1, round(j)))) : [];
+//function coarse(path, ds=1, loop=true, i=0) = i<len(path) ? let(j=path_where(path, ds, i)) j==undef ? (loop ? (norm(path[i]-path[0])>ds*0.65 ? [path[i]] : []) : [last(path)]) : concat([path[i]], coarse(path, ds, loop, max(i+1, ceil(j)))) : [];
+function coarse(path, ds=1, loop=true) = let(p=close_loop(path, enable=loop)) [for (t=quanta(floor(path_length(p)/ds)), end=1) path_lookup(p, t)];
 
 // simplify a path by combining colinear segments, f=colinearity (max is 10)
 function lean(path, f=1, loop, i=0, k) = let(k=ifundef(k, len(path)), loop=ifundef(loop, loopish(path))) i==k ? loop ? [] : [path[k-1]] : let(p=path[i], u=p-path[(i+k-1)%k], v=path[(i+1)%k]-p) concat(colinear(u, v, 1-0.0006*f) && (loop || i>0) ? [] : [p], lean(path, f, loop, i+1, k));
 
 // preserving original shape as much as possible, generate one with vertices distrubuted more evenly, f=resolution
-function uniform(path, f=0.5, loop=true) = f==0 ? path : coarse(refine(path, ds=f/2, loop=loop), ds=f, loop=loop);
+function uniform(path, f=$fs, loop=true) = f==0 ? path : coarse(refine(path, ds=f/3, loop=loop), ds=f, loop=loop);
 
 // soften a path by replacing each sharp corner with an arc of radius no greater than r
-function soften(path, r=5, loop=false, i=0, m, pp) = r==0 ? path :
+function soften(path, r=5, loop=true, i=0, m, pp) = r==0 ? path :
   let(p=i==0 && loop ? let(q=[(path[0]+path[len(path)-1])/2]) concat(q, path, q) : path)
   let(m=ifundef(m, len(p)), pp=ifundef(pp, loop ? [] : [p[0]])) i==m-2 ? loop ? pp : concat(pp, [p[m-1]]) :
   let(o=p[i+1], u=p[i]-o, v=p[i+2]-o, mu=norm(u), mv=norm(v), du=u/mu, dv=v/mv, c2=du*dv, t=sqrt((1-c2)/(1+c2)))
   let(a=min([mu/2,mv/2,r/t]), f=o+a*du, g=o+a*dv, c=o+norm([a,min([r,a*t])])*unit(du+dv), e=cross(u,v))
-  soften(p, r, loop, i+1, m, concat(pp, abs(e)<1e-4 || a<=0 || mu+mv<$fs ? [o] : e<0 ? ccw_path(f, g, po=c) : cw_path(f, g, po=c)));
+  soften(p, r, loop, i+1, m, concat(pp, abs(e)<1 || a<=0 || mu+mv<$fs ? [o] : e<0 ? ccw_path(f, g, po=c) : cw_path(f, g, po=c)));
 
-// wobble a path's x and y coordinates in respect to origin
+// wobble a path's x and y coordinates wrt origin
 function wobble(path, by=0.03, n=32) = [for (p=path) let(t=1+cos(n*atan2(p[1], p[0]))*by) has(p[2]) ? [p[0]*t, p[1]*t, p[2]] : p*t];
 
 // wobble a path's y (if 2D) or z coordinate (if 3D)
-function roller(path, by=3, n=32) = [let(k=len(path)) for (i=keys(path)) let(p=path[i]) has(p[2]) ? [p[0], p[1], p[2]+cos(n*360*i/k)*by] : [p[0], p[1]+cos(n*360*i/k)*by]];
+function roller(path, by=3, n=32) = [let(k=len(path)) for (i=incline(path)) let(p=path[i]) has(p[2]) ? [p[0], p[1], p[2]+cos(n*360*i/k)*by] : [p[0], p[1]+cos(n*360*i/k)*by]];
 
 // compute vector at point i of path radiating away from origin, r = sampling range
 function radiate_at(path, i, r=1, loop=true) = let(w=nearby(path, i, r, loop)) avg([for (j=[0:r*2-1]) w[j+1]+w[j]]);
@@ -338,7 +359,7 @@ function angle_at(path, i, loop=true) = let(w=force2d(nearby(path, i, 1, loop)))
 // ====================================================================
 
 // smooth a path by replacing each segment with a bezier curve, div = subdivisions (auto if omit)
-function smooth(path, div, loop) = path==undef ? undef : div&&div<2 ? path : let(n=len(path)) n<3 || n>200 ? echo(strc("smooth(): path invalid or too complex"), n=n) [] : loop || loop==undef && loopish(path) ? smooth_loop(path, div, n) : smooth_arc(path, div, n);
+function smooth(path, div, loop) = path==undef ? undef : div!=undef&&div<2 ? path : let(n=len(path)) n<3 || n>200 ? echo(strc("smooth(): path invalid or too complex"), n=n) [] : loop || loop==undef && loopish(path) ? smooth_loop(path, div, n) : smooth_arc(path, div, n);
 
 // compute bezier curve using 4 points [begin, control1, control2, end], t in [0,1]
 function bezier(points, t) = [let(d=len(points[0])) for (i=[0:d-1]) [pow(1-t,3), 3*t*pow(1-t,2), 3*t*t*(1-t), pow(t,3)]*slice(points, i)];
@@ -364,7 +385,7 @@ function spline_control_points_arc(k, a, b, c, r, i=0) =
 // smooth an arc k by replacing each segment with a bezier curve, div = number of subdivisions
 function smooth_arc(k, div, n, i=0, p1, p2) = div&&div<=1 ? k : i==n-1 ? [k[i]] :
   let(p1=ifundef(p1, spline_control_points_arc(k)))
-  let(p2=ifundef(p2, [for (i=keys(p1)) i==len(p1)-1 ? (k[i+1]+p1[i])/2 : 2*k[i+1]-p1[i+1]]))
+  let(p2=ifundef(p2, [for (i=incline(p1)) i==len(p1)-1 ? (k[i+1]+p1[i])/2 : 2*k[i+1]-p1[i+1]]))
   let(d=ifundef(div, ceil(path_length([for (t=quanta(8, end=1)) bezier([k[i], p1[i], p2[i], k[i+1]], t)]))))
   concat([for (t=quanta(d)) bezier([k[i], p1[i], p2[i], k[i+1]], t)], smooth_arc(k, div, n, i+1, p1, p2));
 
@@ -418,8 +439,17 @@ function p2c(a, d) = is_list(a) ? a[1]*[cos(a[0]),sin(a[0])] : d*[cos(a),sin(a)]
 // convert a scalar or a 2D point to 3D, filling in y and z as necessary, preserving points already in 3D
 function as3d(point, y=0, z=0) = [ifundef(point[0], point), ifundef(point[1], y), ifundef(point[2], z)];
 
+// check for a valid 2D point
+function valid2d(point) = is_num(point[0]) && is_num(point[1]);
+
 // make points 2D by discarding higher dimensions
 function force2d(points) = is_list(points[0]) ? [for (p=points) [p[0],p[1]]] : [points[0],points[1]];
+
+// check if two vectors are mutually perpendicular, e=tolerance
+function perpend2d(u, v, e=1e-4) = u[0]*v[0] + u[1]*v[1] < e;
+
+// check if two vectors are in parallel, e=tolerance
+function parallel2d(u, v, e=1e-4) = abs(u[0]*v[1] - u[1]*v[0]) < e;
 
 // angle between two vectors
 function angle2d(u, v) = atan2(v*[-u[1],u[0]], v*u);
@@ -434,7 +464,7 @@ function scale2d(points, xscale=1, yscale) = let(ys=yscale?yscale:xscale) [for (
 // if dm is a scalar, fit points into a circle of diameter dm at origin
 function fit2d(points, dm=[50,50], prop=true, center=true) =
   let(d=size2d(points)) min(d)==0 ? center2d(points, enable=center) :
-  dim(dm)==0 ? let(e=encircle2d(points)) shift2d(points*dm/e[1]/2, center?-e[0]:[0,0]) :
+  rank(dm)==0 ? let(e=encircle2d(points)) shift2d(points*dm/e[1]/2, center?-e[0]:[0,0]) :
   let(dx=opt(dm,0), dy=opt(dm,1), px=dx<0?-1:1, py=dy<0?-1:1)
   let(rx=abs(dx)/d[0], ry=abs(dy)/d[1], rr=(rx==0&&ry==0)?1:rx==0?ry:ry==0?rx:min(rx,ry))
   let(sx=prop||dx==0?rr:rx, sy=prop||dy==0?rr:ry) center2d([for (p=points) [p[0]*px*sx,p[1]*py*sy]], enable=center);
@@ -462,14 +492,14 @@ function flush2d(points, xsign, ysign, origin=[0,0]) = let(xx=minmax(slice(point
 // centroid of 2D points (same as average)
 function centroid2d(points) = avg(points);
 
-// among many points, find the one closest to c (if c is undefined, find the one closest to centroid)
-function near2d(points, c) = let(c=ifundef(c, avg(points))) points[key_min([for (p=points) norm(p-c)])];
+// among many points, find the index of one closest to c (if c is undefined, find the one closest to centroid)
+function near2d(points, c) = let(c=ifundef(c, avg(points))) key_min([for (p=points) norm(p-c)]);
 
 // center 2D points
 function center2d(points, at=[0,0], enable=true) = is_list(points) && enable ? let(c=[for (i=[0:1]) avg(minmax(slice(points, i)))]-at) [for (p=points) p-c] : points;
 
 // deviate 2D points randomly, each coordinate change has range (-max/2,max/2)
-function shake2d(points, max=1, seed) = let(s=rnd_seed(seed)) [for (i=[0:len(points)-1]) points[i] + rnd(-max/2, max/2, 2, i+s/(i+1))];
+function shake2d(points, max=1, seed) = let(k=len(points)) k==0 ? [] : let(s=rnd_seed(seed)) [for (i=[0:k-1]) points[i] + rnd(-max/2, max/2, 2, i+s/(i+1))];
 
 // a list of random 2D points, each coordinate within range (min,max)
 function random2d(n, min=-1, max=1, seed) = let(s=rnd_seed(seed)) [for (i=[1:n]) rnd(min, max, 2, i+s/i)];
@@ -488,16 +518,16 @@ function radiate2d(path, n, i=1) = i<n ? concat([let(r=m2_rotate(360/n*i)) for (
 // a line segment
 function line(x, y) = [[0,0],[x,y]];
 
-// combine a list of 2D paths end to end, from=override starting point
+// combine a list of 2D paths end-to-end, optional from=starting point
 function concat2d(paths=[], from, i=0) = let(p=paths[i], from=ifundef(from, p[0])) p[0] ? concat(shift2d(subarray(p, i==0 ? 0 : 1), from-p[0]), concat2d(paths, from-p[0]+last(p), i+1)) : i<len(paths) ? concat2d(paths, from, i+1) : [];
 
 // similar to concat2d except that each segment is a single vector instead of a path
 function step2d(vectors, from=[0,0], i=0, m) = let(m=ifundef(m, len(vectors)), p=i==0?from:vectors[i-1]+from) concat([p], i==m ? [] : step2d(vectors, p, i+1, m));
 
-// join paths to form a loop (drop the last point if same as the first)
-function loop2d(paths=[], from) = let(c=fuse(concat2d(paths, from))) snip(c, c[0]==c[len(c)-1]?1:0); 
+// join paths end-to-end to form a loop (will drop the last point if same as the first)
+function loop2d(paths=[], from) = let(c=fuse(concat2d(paths, from), loop=true)) snip(c, c[0]==c[len(c)-1]?1:0); 
 
-// extend a path by adding a copy of itself reflected across x-axis and/or y-axis (default is x-axis)
+// extend a path by concatenating a scaled copy of itself across x-axis and/or y-axis (default is x-axis)
 function mirror2d(path, xs=-1, ys=1) = concat(path, [for (p=reverse(path)) [p[0]*xs,p[1]*ys]]);
 
 // remove points outside of retangular range
@@ -509,19 +539,19 @@ function filter2d(points, l, h) = [for (p=points) if (within(p[1], l, h)) p];
 // remove points outside a circle of radius r at center
 function spot2d(points, r, center=[0,0]) = [for (p=points) if (norm(p-center) <= r) p];
 
-// find intersection of two line segments s1=[p0,p1] and s2=[p2,p3], including touching points
+// find intersection of two line segments s1=[p0,p1] and s2=[p2,p3], including end points
 function meet2d(s1, s2, virtual=false) = let(r=s1[1]-s1[0], s=s2[1]-s2[0], c=r && s ? cross(r, s) : 0) c==0 ? undef : let(d=s2[0]-s1[0], t=cross(d, s)/c, u=cross(d, r)/c) virtual || within(t, 0, 1) && within(u, 0, 1) ? s1[0]+t*r : undef;
 
-// find intersection of two line segments s1=[p0,p1] and s2=[p2,p3], excluding touching points, e=tolerance
+// find intersection of two line segments s1=[p0,p1] and s2=[p2,p3], excluding end points, e=tolerance
 function cut2d(s1, s2, e=0) = let(r=s1[1]-s1[0], s=s2[1]-s2[0], c=r && s ? cross(r, s) : 0) c==0 ? undef : let(d=s2[0]-s1[0], t=cross(d, s)/c, u=cross(d, r)/c) (t!=0 && t!=1 && u!=0 && u!=1 && t>-e && t<1+e && u>-e && u<1+e) ? s1[0]+t*r : undef;
 
 // check if profile is strictly convex
 function convex2d(profile, f=0.001, i=0, k) = let(k=ifundef(k, len(profile))) i<k ? let(p0=profile[(i+k-1)%k], p1=profile[i], p2=profile[(i+1)%k]) convex2d(profile, f, i+1, k) && cross(unit(p2-p1), unit(p0-p1))>-f : true;
 
-// flip a 2D profile on the xy-plane on to the xz-plane, for debugging throw() and lathe()
+// flip a 2D profile from the xy-plane to the xz-plane in 3D, for debugging throw() and lathe()
 function upright2d(profile, shift=[0,0]) = [for (p=shift2d(profile, shift)) [p[0],0,p[1]]];
 
-// squeeze near the center of a profile
+// squeeze near the center of a profile, x,y=amount
 function squeeze2d(profile, x=0, y=0) = let(
     b=box2d(profile),
     c=[b[2][0]+b[0][0],b[2][1]+b[0][1]]/2,
@@ -544,6 +574,9 @@ function vnormal2d(path, idx, d=1) = let(g=len(path)) g<3 ? undef : let(
     n = n1+n2+(v2-v1)/r)
   n && w>0 && norm(n)>0.1 ? unit(n)*d : [0,0];
 
+// find intersection point(s) of 2 circles
+function circles_meet(c1, c2, r1, r2) = let(d=norm(c1-c2), a=(r1*r1-r2*r2+d*d)/(2*d), m=c1+a*(c2-c1)/d, s=sqrt(r1*r1-a*a)*orth2d(c2-c1)/d) [m+s,m-s];
+
 // return [origin, radius] of the circle passing through 3 points in 2D
 function circle3p(p1, p2, p3) = (p1==p2 || p2==p3 || p3==p1) ? undef :
   (p2[1]-p1[1])/(p2[0]-p1[0])==(p3[1]-p2[1])/(p3[0]-p2[0]) ? undef :
@@ -557,7 +590,7 @@ function circle3p(p1, p2, p3) = (p1==p2 || p2==p3 || p3==p1) ? undef :
 // return a shortest counterclockwise arc passing through 3 points in 2D
 function arc3p(p1, p2, p3) = let(o=circle3p(p1, p2, p3)[0])
 let(p=[p1,p2,p3], d=[norm(p2-p3),norm(p1-p3),norm(p1-p2)], m=key_max(d), e1=p[(m+1)%3], e2=p[(m+2)%3])
-  o==undef ? [e1,e2] : cross2d([e1,p[m],e2])>0 ? ccw_path(e1, e2, po=o) : ccw_path(e2, e1, po=o);
+  o==undef ? [e1,e2] : area2d([e1,p[m],e2])>0 ? ccw_path(e1, e2, po=o) : ccw_path(e2, e1, po=o);
 
 // repair self-intersecting profile, r=radius i.e. if defined, only compare segment i to segments [i-r,i+r],
 // lean=may remove points, e=tolerance of intersection detection
@@ -571,32 +604,32 @@ function tidy2d(p, r, loop=false, lean=false, e=0.001) = r==0 ? p : let(k=len(p)
   [for (i=[0:k-1]) let(t=[for (j=d) if (within(i,j[0],j[1]) || within(i+k,j[0],j[1])) j]) if (!lean || len(t)==0 || i==t[0][1]%k) len(t)==0 ? p[i] : t[0][2]];
 
 // return a profile keeping distance d away from the given profile, tidy=optional radius for cleanup
-// note that size of the resulting profile will be different from the original
-function embrace2d(profile, d=1, loop=false, tidy, i=0, m, e, p) = d==0 ? profile :
+// note that number of points on the resulting profile will be different from the original
+function escort2d(profile, d=1, loop=false, tidy, i=0, m, e, p) = d==0 ? profile :
   let(m=ifundef(m, len(profile))) i==(loop ? m+1 : m) ? tidy2d(p, tidy, loop=loop, lean=true) :
   let(p1=profile[(i+m-1)%m], p2=profile[i%m], u=unit([p2[1]-p1[1],p1[0]-p2[0]])*d)
   let(v1=p1+u, v2=p2+u, n=(loop&&i==1)||e&&norm(e[1]-v1)>$fs/2, v=e?abs(d)*unit((e[1]+v1)/2-p1)+p1:undef)
   let(pp=i==0 ? [] : concat(p, [if (n&&(loop||i>1)) v], [if (n||i==1) v1, v2]))
-  embrace2d(profile, d, loop, tidy, i+1, m, [v1,v2], pp);
+  escort2d(profile, d, loop, tidy, i+1, m, [v1,v2], pp);
 
-// inflate/deflate (offset) a profile (does not work well in some cases), i, m, e, p are private
-// different from embrace2d() because it always assumes a loop and preserves size of the original
+// inflate/deflate (offset) a profile (does not work well in some cases) [private: i, m, e, p]
+// it's different from escort2d() because it always assumes a loop and preserves number of points in the original
 function offset2d(profile, d=1, f=3, tidy=50, i=0, m, e, p) = d==0 ? profile :
   let(m=ifundef(m, len(profile))) i==m+1 ?  tidy2d(p, tidy, loop=true, lean=false) :
   let(s1=profile[(i+m-1)%m], s2=profile[i%m], u=unit([s2[1]-s1[1],s1[0]-s2[0]])*d, v1=s1+u, v2=s2+u)
   let(pp=i==0 ? [] : concat(p, [v1==v2 ? e[1] : colinear(e[1]-e[0], v2-v1) ? v1 : let(c=ifundef(meet2d(e, [v1,v2], true), v1)) abs(norm(c-s1)/d)>f ? s1*0.95+c*0.05 : c])) offset2d(profile, d, f, tidy, i+1, m, [v1,v2], pp);
 
-// produce a profile encasing path, t=thickness, rounded=circular tips (loop=true causes a hack to create a "hole")
+// produce a profile surrounding path, t=thickness, rounded=circular ends (loop=true causes a hack to create a "hole")
 function fence2d(path, t=1, rounded=true, s=0, loop=false, tidy) = len(path)<2 ? [] :
   let(p=rectify(path), rounded=(rounded && t>$fs), s=min(s, t/2))
-  let(b1=embrace2d(p, t/2, tidy=0, loop=loop), b2=embrace2d(p, -t/2, tidy=0, loop=loop))
+  let(b1=escort2d(p, t/2, tidy=0, loop=loop), b2=escort2d(p, -t/2, tidy=0, loop=loop))
   let(s1=close_loop(soften(tidy2d(b1, tidy, lean=true), s, loop=loop), loop))
-  let(s2=close_loop(reverse(soften(tidy2d(b2, tidy, lean=true), s, loop=loop)), loop))
+  let(s2=close_loop(reverse(soften(tidy2d(b2, tidy, lean=true), s, loop=loop), loop=loop), loop))
   let(e1=!loop && rounded ? subarray(ccw_path(last(s2), s1[0], po=p[0]), 1, -2) : [])
   let(e2=!loop && rounded ? subarray(ccw_path(last(s1), s2[0], po=last(p)), 1, -2) : [])
   concat(s1, e2, s2, e1);
 
-// produce a scaled profile by shifting each point a constant distance away from origin
+// produce a scaled profile by shifting each point a constant distance away from origin (see also scale2d, offset2d)
 function expand2d(profile, by) = [for (p=profile) let(n=norm(force2d(p)),s=(n+by)/n) ifdef(p[2], [p[0]*s,p[1]*s,p[2]], p*s)];
 
 // return the bounding box (4 points) of a profile, b=border
@@ -611,21 +644,22 @@ function box2dh(profile) = span(slice(profile,1));
 // center of bounding box
 function box2dc(profile) = [avg(slice(profile,0)), avg(slice(profile,1))];
 
-// dimensions of a profile
+// return [width,height] of a profile
 function size2d(profile) = len(profile)<2 ? [0,0] : [span(slice(profile,0)),span(slice(profile,1))];
 
 // compute the [origin, radius] of a non-optimal enclosing circle for a profile
-//function encircle2d(profile) = let(c=avg(profile)) [c,max([for (p=profile) norm(p-c)])];
 function encircle2d(profile, n=16) = let(v=[for (a=quanta(n, max=90)) let(p=spin2d(profile, a), s=size2d(p)) [abs(s[0]-s[1]),avg(spin2d(box2d(p), -a))]], c=v[key_min(slice(v,0))][1]) [c,max([for (p=profile) norm(p-c)])];
 
-// return the cross product of a profile (indicates its clockwise order, +ve means counterclockwise)
-function cross2d(profile, i=0) = let(k=len(profile)) i>=k ? 0 : let(p1=profile[i], p2=profile[(i+1)%k]) (p1[0]-p2[0])*(p1[1]+p2[1]) + cross2d(profile, i+1);
+// return the signed area of a profile (+ve means counterclockwise)
+function area2d(profile, i=0) = let(k=len(profile)) i>=k ? 0 : let(p1=profile[i], p2=profile[(i+1)%k]) (p1[0]-p2[0])*(p1[1]+p2[1]) + area2d(profile, i+1);
 
 // rectify the orientation of a profile (to be counterclockwise wrt z), center=relocate to origin
-//function rectify(profile, dm=[0,0], center=true) = let(p=reverse(profile, enable=cross2d(profile)<0)) fit2d(p, dm=dm, prop=true, center=center);
-function rectify(profile, dm=[0,0], center=false) = let(p=fit2d(profile, dm=dm, prop=true, center=center)) reverse(p, enable=cross2d(p)<0);
+function rectify(profile, dm=[0,0], center=false) = let(p=fit2d(profile, dm=dm, prop=true, center=center)) reverse(p, enable=area2d(p)<0);
 
-// Ulam spiral walk on xy plane
+// a sign derived from 3 vectors indicating if they follow the right-hand-rule (+ve=yes, -ve=no, 0=degenrate case)
+function sign3v(v1, v2, v3) = v1==undef||v2==undef||v3==undef ? 0 : cross(v1, v2) * v3;
+
+// Ulam spiral on xy plane, counterclockwise starting with ulam(1) = [0,1,0], ulam(2) = [-1,1,0], etc.
 function ulam(n) = let(
     r = floor((sqrt(n)-1)/2)+1,
     c = (2*r-1)*(2*r-1),
@@ -634,7 +668,7 @@ function ulam(n) = let(
     y = n == 0 ? 0 : p >= 0 && p <= 1 ? -r : p <= -1 ? r : p <= 0 ? r-(p+1)*2*r : -r+(p-1)*2*r)
   [x, y, 0];
 
-// points on a grid of width w and depth d, divided evenly by nw and nd segments on each axes.
+// points on a grid of width w and depth d, divided evenly by nw and nd segments respectively
 function grid(w, d, nw=2, nd=2) = [for (i=quanta(nw, end=1), j=quanta(nd, end=1)) [i*w-w/2,j*d-d/2]]; 
 
 // isometric grid of width w and depth d, s=spacing between any two adjacent points
@@ -645,13 +679,13 @@ function hex_cell(i, j) = let(r=sqrt(3)/2) i%2==0 ? [i*r,j] : [i*r,j+0.5];
 function hex_grid(m, n, trim=true) = let(n=ifundef(n, m)) [for (i=[0:m-1], j=[0:(trim && i%2==0?n-1:max(0,n-2))]) hex_cell(i, j)];
 
 // ====================================================================
-// R^2 profiles (anticlockwise wherever applicable)
+// R^2 profiles (counterclockwise wherever applicable)
 // ====================================================================
 
 function quad_path(w, d, center=true) = let(d=ifundef(d,w)) center ? let(x=w/2, y=d/2) [[x,y],[-x,y],[-x,-y],[x,-y]] : [[0,0],[w,0],[w,d],[0,d]]; // 4 corners only
 function rect_path(x, y) = let(y=ifundef(y,x)) [[x,y],[-x,y],[-x,-y],[x,-y]]; // 4 corners only
 function round_path(x, y, a=[0,360]) = let(y=y?y:x, k=confine(a[1]-a[0], -360, 360), n=ceil(_fn(max(abs(x),abs(y)))*abs(k)/360), m=abs(k)<360?n:n-1) [for (i=[0:m]) let(t=a[0]+k*i/n) [x*cos(t),y*sin(t)]];
-function fillet_path(x=1, y, convex=false, loop=true) = let(y=y?y:x, n=x==0?1:ceil(min(90/$fa, perimeter(abs(x),abs(y))/4/$fs))) concat([if (loop) [0,0]], [for (i=[0:n]) let(t=90*i/n) convex ? [x*cos(t),y*sin(t)] : [x-x*sin(t),y-y*cos(t)]]);
+function fillet_path(x=1, y, convex=false, loop=true) = let(y=y==undef?x:y, e=x*y==0, n=max(1,round(90/_fa(x,y)))) concat([if (loop&&!e) [0,0]], [for (i=[0:n]) let(t=90*i/n) convex ? [x*cos(t),y*sin(t)] : [x-x*sin(t),y-y*cos(t)]]);
 function spiral_path(d, a=[0,360], f=3, start=0, end=1) = let(a0=ifundef(a[0],0), a1=opt(a,1), aa=a1-a0) [for (t=quanta(ceil(PI*d*abs(aa)*(end-start)/600/$fs), start=start, end=end)) let(b=a0+t*aa, e=pow(t,f)*d/2) [cos(b)*e,sin(b)*e]];
 
 // ====================================================================
@@ -661,9 +695,9 @@ function spiral_path(d, a=[0,360], f=3, start=0, end=1) = let(a0=ifundef(a[0],0)
 function arc_path(d=[1,1], a=[0,180]) = let(x=opt(d,0)/2, y=opt(d,1)/2, k=confine(a[1]-a[0], -360, 360), n=ceil(_fn(max(abs(x),abs(y)))*abs(k)/360), m=min(x,y)==0?0:abs(k)<360?n:n-1) [for (i=[0:m]) let(t=a[0]+k*i/n) [cos(t)*x,sin(t)*y]];
 function ring_path(d=10, a=[0,360], s=[1,1]) = let(k=confine(a[1]-a[0], -360, 360), n=ceil(_fn(d/2)*abs(k)/360), m=abs(k)<360?n:n-1) [for (i=[0:m]) let(t=a[0]+k*i/n) [cos(t)*s[0],sin(t)*s[1]]*d/2];
 function apple_path(d=10) = let(n=ceil(_fn(d/2)*1.5)) [for (i=[0:n-1]) apple_locus(i/n)*d];
-function fat4_path(d=10) = radiate2d(shift2d(round_path(d, a=[-24,24], $fa=$fa/2), [-d/2,0]), 4);
+function puffy_path(d=10) = radiate2d(shift2d(round_path(d, a=[-24,24], $fa=$fa/2), [-d/2,0]), 4);
 function bang_path(d=10) = radiate2d(shift2d(round_path(0.1875*d, a=[224,136]), [0.625*d,0]), 12);
-function floral_path(d=10, n=5) = let(c=n+1) [for (t=quanta(_fn(d/2)*n)) [c*cos(360*t)-cos(c*360*t),c*sin(360*t)-sin(c*360*t)]*d/(2*c)];
+function floral_path(d=10, n=5) = let(c=n+1) [for (t=quanta(_fn2(d)*sqrt(n))) [c*cos(360*t)-cos(c*360*t),c*sin(360*t)-sin(c*360*t)]*d/(2*c)];
 function petal_path(d, n=5, c=0) = [for (t=quanta(_fn(d*n)*2, max=360)) [cos(t),sin(t)]*max(c,(d/3+d/5*cos(180+n*t)))];
 function heart_path(d=10) = [for (t=quanta(_fn(d/2))) let(s=abs(2*t-1), r=0.7*d*(s*s*s-7*s*s+10*s)/(5-pow(s,12))) [r*cos(360*t)-d/5,r*sin(360*t)]];
 function poly_path(d=10, n=5) = [for (t=quanta(n)) let(a=180/n+360*t) [cos(a),sin(a)]*d/2];
@@ -673,16 +707,19 @@ function butterfly_path(d=10) = let(n=_fn(d/2)*2) [for (i=[0:n-1]) butterfly_loc
 function egg_path(d=10) = let(n=_fn(d/2)) [for (i=[0:n-1]) egg_locus(i/n)*d];
 function box_path(w=10, d) = let(d=ifundef(d,w)) [for (t=quanta(_fn(min(w,d)/16)*8)) box_trace(t, [w,d], true)];
 function arch_path(d=10) = [for (t=quanta(_fn(d))) arch_trace(t)-[0.5,0.5]]*d;
+function tear_path(d, f=1) = [for (a=quanta(_fn(d/3), max=360)) [(cos(a)-1)*f*d+d, (cos(a)+1)*sin(a)*d/3]/2];
 function teeth_path(d=10, n=20, f=1, s=1) = let(a=90/n) radiate2d(concat(ring_path(d, [-a+s,a-s]), ring_path(d-f, [a+s,a*3-s])), n); // f=depth of teeth, s=teeth sharpness
 function puzzle_path(d=10, y=0) = [for (t=quanta(_fn(d/2), end=1)) [d/2,d+y]-puzzle_trace(t)*d];
 function comma_path(d=10, f=0.5) = let(n=_fn2(d/2)) [for (t=quanta(n, end=1, max=1)) [cos(t*360),sin(t*360)]*(1-t+f*t)*d/2];
-function leaf_path(w, d) = let(d=ifundef(d, w*0.6)) [for (t=quanta(ceil(perimeter(w/2, d/2)/8/$fs)*2)) let(a=t*360) [w*cos(a),d*sin(a)^3]/2];
-function pad_path(w, d, r=2, half=false) = let(d=ifundef(d,w), r=max(0, min(r, min(w, d)/2-0.01))) concat(
-  shift2d(round_path(r, a=[0,90]), [w/2-r,d/2-r]),
-  shift2d(round_path(r, a=[90,180]), [-w/2+r,d/2-r]),
-  half ? [[-w/2,-d/2]] : shift2d(round_path(r, a=[180,270]), [-w/2+r,-d/2+r]),
-  half ? [[w/2,-d/2]] : shift2d(round_path(r, a=[270,360]), [w/2-r,-d/2+r])
-);
+function leaf_path(d, f) = let(f=ifundef(f, d*0.6)) [for (a=quanta(_fn(d/3), max=360)) [d*cos(a),f*sin(a)^3]/2];
+function cloud_path(w, d, n=11, f=3, seed) = let(d=ifundef(d, w), seed=rnd_seed(seed), p=shake2d(round_path(w/2, d/2, $fn=n), (w+d)/40, seed=seed), k=len(p)) loop2d([for (i=[0:k-1]) ccw_path(p[i], p[(i+1)%k], f)]);
+function pad_path(w, d, r=2, half=false) =
+  let(d=ifundef(d,w), r=max(0.01, min(r, min(w, d)/2-0.01)), w2=w/2, d2=d/2) concat(
+    ccw_path([w2,d2-r], [w2-r,d2], po=[w2-r,d2-r]),
+    ccw_path([-w2+r,d2], [-w2,d2-r], po=[-w2+r,d2-r]),
+    half ? [[-w/2,-d/2]] : ccw_path([-w2,-d2+r], [-w2+r,-d2], po=[-w2+r,-d2+r]),
+    half ? [[w/2,-d/2]] : ccw_path([w2-r,-d2], [w2,-d2+r], po=[w/2-r,-d/2+r])
+  );
 
 // ====================================================================
 // loci of enclosing shapes: [0,1) -> R^2
@@ -737,12 +774,12 @@ function inf_trace(t, z=0) = let(a=t*360) [cos(a), sin(a*2)/2, z*sin(a)/4]/(3-co
 // ====================================================================
 
 function line_path(p, from=[0,0]) = [from,p];
-function ccw_path(p1, p2, i=0, po) = let(m=(p1+p2)/2, ov=orth2d(p2-p1), u=unit(ov))
-  let(o=m+(po?u*(po-m)*u:ov/2), r=norm(p1-o)) norm(p1-p2)<4*PI*r/_fn(r) ? i==0 ? [p1,p2] : [p1] :
-  let(pm=o-r*u) concat(ccw_path(p1, pm, i+1, o), ccw_path(pm, p2, i+1, o), i==0?[p2]:[]);
-function cw_path(p1, p2, i=0, po) = let(m=(p1+p2)/2, ov=orth2d(p1-p2), u=unit(ov))
-  let(o=m+(po?u*(po-m)*u:ov/2), r=norm(p1-o)) norm(p1-p2)<4*PI*r/_fn(r) ? i==0 ? [p1,p2] : [p1] :
-  let(pm=o-r*u) concat(cw_path(p1, pm, i+1, o), cw_path(pm, p2, i+1, o), i==0?[p2]:[]);
+function ccw_path(p1, p2, f=2, i=0, po) = let(m=(p1+p2)/2, ov=orth2d(p2-p1), u=unit(ov))
+  let(o=m+(po?u*(po-m)*u:ov/f), r=norm(p1-o)) norm(p1-p2)<=2*$fs ? i==0 ? [p1,p2] : [p1] :
+  let(pm=o-r*u) concat(ccw_path(p1, pm, f, i+1, o), ccw_path(pm, p2, f, i+1, o), i==0?[p2]:[]);
+function cw_path(p1, p2, f=2, i=0, po) = let(m=(p1+p2)/2, ov=orth2d(p1-p2), u=unit(ov))
+  let(o=m+(po?u*(po-m)*u:ov/f), r=norm(p1-o)) norm(p1-p2)<=2*$fs ? i==0 ? [p1,p2] : [p1] :
+  let(pm=o-r*u) concat(cw_path(p1, pm, f, i+1, o), cw_path(pm, p2, f, i+1, o), i==0?[p2]:[]);
 function sin_path(p1, p2, n=1, m=0.5) = let(v=p2-p1, ov=orth2d(v)*m) [for (t=quanta(n*90, end=1)) p1+t*v+sin(t*n*360)*ov];
 function cos_path(p1, p2, n=1, m=0.5) = let(v=p2-p1, ov=orth2d(v)*m) [for (t=quanta(n*90, end=1)) p1+t*v+cos(t*n*360)*ov];
 function peanut_path(p1, p2, w=10, f=1.2) = let(m=(p1+p2)/2, e=p2-p1, h=norm(e), c=e[0]/h, s=e[1]/h, v=h/2) [for (t=quanta(ceil(perimeter(v, w)/8/$fs)*2)) let(a=t*360) m + [cos(a)*(v+f*w/2),(2*sin(a)-sin(a)^5)*w/2] * [[c,s],[-s,c]]];
@@ -751,7 +788,7 @@ function peanut_path(p1, p2, w=10, f=1.2) = let(m=(p1+p2)/2, e=p2-p1, h=norm(e),
 // 3D paths between points
 // ====================================================================
 
-function ruler_path(p1, p2, n) = let(d=p2-p1) [for (t=quanta(n?n:_fn(norm(d)), end=1)) p1+t*d]; // 2D also works
+function ruler_path(p1, p2, n) = let(d=p2-p1) [for (t=quanta(n?n:ceil(norm(d)/$fs), end=1)) p1+t*d]; // 2D also works
 function exp_path(p1, p2, n, r=2, v) = r==0 ? [p1,p2] : r==1 ? ruler_path(p1, p2, n) : let(v=ifundef(v, (p2-p1)*(1-r)/(1-pow(r,n)))) n==0 ? [p1] : let(p=p2-pow(r,n-1)*v) concat(exp_path(p1, p, n-1, r, v), [p2]); // divide into n segments of exponential ratios
 function bush_path(p1, p2, f=3, end=1) = let(dx=p2[0]-p1[0], dy=p2[1]-p1[1], dz=p2[2]-p1[2]) [for (t=quanta(norm(p1-p2)*2, end=end)) let(s=poly_ease(t,f)) p1+[dx*s,dy*s,dz*t]];
 function vault_path(p1, p2, n, loop=false) = let(q1=p1[2]<p2[2]?p1:p2, q2=p1[2]<p2[2]?p2:p1, m=q1+[0,0,q2[2]-q1[2]]) concat([for (t=quanta(ceil(ifundef(n, norm(p2-p1)/$fs/2)), end=1)) bezier([p1,m,m,p2], t)], loop?[m]:[]);
@@ -764,25 +801,28 @@ function helix_path(p1, p2, d=3, pitch=1) = pitch==0 ? [] : let(v=p2-p1, r=d/2, 
 // an arbitrary orthogonal vector of v
 function orth(v) = let(x=v[0], y=v[1], z=v[2]) x!=0 && y!=0 ? [y,-x,0] : x!=0 && z!=0 ? [z,0,-x] : y!=0 && z!=0 ? [0,z,-y] : [z, x, y];
 
-// an orthogonal vector of v in respect to point u
+// an orthogonal vector of v wrt point u
 function orth2(v, u) = v-(u*v)/(v*v)*u;
 
 // project vector v onto vector u
 function proj(v, u) = (u*v)/(v*v)*u;
 
-// project vector v onto a plane defined by normal unit vector n
+// project vector v onto a plane at origin defined by normal unit vector n
 function proj2(v, n) = v-(v*n)*n;
 
-// project vector v along direction d onto a plane defined by normal vector n of any magnitude
+// project vector v along direction d onto a plane at origin defined by normal vector n of any magnitude
 function proj3(v, d, n) = v-(v*n)/(d*n)*d;
 
-// project 3D points onto xy-plane towards eye location [0,0,e]
+// project 3D points onto xy-plane wrt eye location [0,0,e]
 function proj3d(points, e) = [for (p=points) [p[0],p[1]]*e/(e-p[2])];
 
 // swap coordinates
 function swap_xy(points) = [for (p=points) ifdef(p[2], [p[1],p[0],p[2]], [p[1],p[0]])];
 function swap_yz(points) = [for (p=points) [p[0],ifundef(p[2],0),p[1]]];
 function swap_xz(points) = [for (p=points) [ifundef(p[2],0),p[1],p[0]]];
+
+// check for a valid 3D point
+function valid3d(point) = is_num(point[0]) && is_num(point[1]) && is_num(point[2]);
 
 // ascend 2D or 3D points, dz=z increment {see force3d()}
 function ascend3d(points, dz=0) = [for (p=points) [is_list(p)?p[0]:p,ifundef(p[1],0),ifundef(p[2],0)+dz]];
@@ -799,23 +839,29 @@ function angle3d(u, v=[0,0,1]) = atan2(norm(cross(v,u)), u*v);
 // signed angle from vector u to v in reference to a plane with normal vector n
 function s_angle3d(u, v, n) = atan2(cross(v,u)*n, u*v);
 
-// calculate XYZ-convention Euler angles (may cause gimbal lock) from directional vector, usage: m4_rotate(euler(v))
+// calculate XYZ-convention Euler angles (may cause gimbal lock) from directional vector, usage: m4_euler(euler(v))
 function euler(v) = let(m=m3_rotate(v)) [atan2(m[1][2], m[2][2]), asin(-m[0][2]), atan2(m[0][1], m[0][0])];
 
-// return 1 or -1 if colinear, zero otherwise
+// return 1 or -1 if colinear, zero otherwise, t=threshold
 function colinear(u, v, t=0.9999) = let(d=(u*v)/norm(u)/norm(v)) abs(d)>t ? sign(d) : 0;
 
 // mash points to flatten the population (l=low, h=high)
 function mash3d(points, l, h) = [for (p=points) let(z=ifdef(l,max(l,p[2]),p[2])) [p[0],p[1],ifdef(h,min(h,z),z)]];
 
-// remove points outside of z range (l=low, h=high)
+// remove points outside of z range [l,h]
 function filter3d(points, l, h) = [for (p=points) if (within(p[2], l, h)) p];
 
 // scale 3D points, ratios=[xscale,yscale,zscale]
-function scale3d(points, ratios) = [for (p=points) [p[0]*ratios[0],p[1]*ratios[1],ifundef(p[2],0)*ratios[2]]];
+function scale3d(points, ratios, origin=[0,0,0]) = let(xs=opt(ratios, 0), ys=opt(ratios, 1), zs=opt(ratios, 2)) [for (p=shift3d(points, -origin)) [p[0]*xs,p[1]*ys,ifundef(p[2],0)*zs]+origin];
 
-// normalize 3D points onto the unit sphere (radius = 1) at origin
+// project 3D points onto the unit sphere (radius = 1) at origin
 function unit3d(points, origin=[0,0,0]) = [for (p=points) p / norm(p-origin)];
+
+// translate 2D or 3D points so that point i becomes the origin
+function anchor(points, i=0) = let(k=len(points), i=(i+k)%k) [for (p=points) p-points[i]];
+
+// adjust dimension(s)
+function adjust3d(points, delta=[0,0,0]) = rank(points)<2 ? points+delta : [for (p=points) p+delta];
 
 // shift 3D points
 function shift3d(points, vector) = [for (p=points) [p[0]+vector[0],p[1]+vector[1],ifundef(p[2],0)+vector[2]]];
@@ -840,8 +886,11 @@ function center3d(points, at=[0,0,0]) = shift3d(points, at-centroid3d(points));
 // revolve 3D points about z-axis
 function spin3d(points, a) = points * m3_spin(a);
 
+// compute collective normal for a loop
+function cross3d(points, i=0, u) = let(k=len(points), u=ifundef(u, points[1]-points[0])) i<k-2 ? let(v=points[(i+2)%k]-points[0]) cross(u, v) + cross3d(points, i+1, v) : points[0]*0;
+
 // convert points to 3D, set z if provided, otherwise preserve z or default to 0 {see ascend3d()}
-function force3d(points, z) = dim(points)>1 ? [for (p=points) [p[0],p[1],z==undef?ifundef(p[2],0):z]] : [points[0],points[1],z==undef?ifundef(points[2],0):z];
+function force3d(points, z) = rank(points)>1 ? [for (p=points) [p[0],p[1],z==undef?ifundef(p[2],0):z]] : [points[0],points[1],z==undef?ifundef(points[2],0):z];
 
 // shake up 3D points
 function shake3d(points, max=10, seed) = let(s=rnd_seed(seed)) [for (i=[0:len(points)-1]) points[i] + rnd(-max/2, max/2, 3, i+s/(i+1))];
@@ -865,7 +914,7 @@ function land(points, r) = [for (p=points) unit(p)*r];
 // project 2D points to the top surface of a sphere, f=scaling factor
 function on_sphere(points, r, f=12) = [for (p=points) let(h=(90+p[0]*f),v=p[1]*f,q=(r+p[2])*[-cos(h)*cos(v), sin(h)*sin(v), sin(h)*cos(v)]) q*(r+p[2])/norm(q)];
 
-// find center of a sphere given 3 points on its surface and radius r (negate r to get the other solution)
+// find center of a sphere given 3 points on its surface and radius r (negate r to get the other solution if available)
 function sphere3p(p1, p2, p3, r) = let(p21=p2-p1, p31=p3-p1, n=cross(p21,p31), o=p1+cross((p21*p21)*p31-(p31*p31)*p21, n)/(n*n)/2, t=sign(r)*sqrt((r*r-(o-p1)*(o-p1))/(n*n))) t==t ? o+t*n : undef;
 
 // return points on a grid of dimension dm=[x,y,z], divided evenly by ns=[nx,ny,nz] sections on each axes.
@@ -877,16 +926,16 @@ function orbit(n) = let(c=180*(1+sqrt(5))) [for (i=[0.5:n-0.5]) let(h=acos(1-2*i
 // Fibonacci pattern of n points in a circle of radius 1
 function sunflower(n) = let(c=180*(1+sqrt(5))) [for (i=[0.5:n-0.5]) let(r=sqrt(i/n), t=c*i) [r*cos(t), r*sin(t)]];
 
-// vertices of a tetrahedron enclosed in a sphere of diameter d
+// vertices of a tetrahedron enclosed by a sphere of diameter d
 function tetra(d=10) = let(f=d/(2*sqrt(3))) [for (i=[1,-1], j=[1,-1]) f*[i,j,i*j]];
 function tetra_faces() = [[0,2,1],[0,1,3],[0,3,2],[1,2,3]];
 
-// vertices of an icosahedron enclosed in a sphere of diameter d
+// vertices of an icosahedron enclosed by a sphere of diameter d
 function icosa(d=10) = let(phi=golden(), u=[-1,1], v=1/[phi,-phi]) [for (k=[0:2],j=u,i=v) [[i,j,0],[j,0,i],[0,i,j]][k]]*d/sqrt(1+2/(3+sqrt(5)))/2;
 function icosa_faces() = [[0,9,1],[0,1,11],[0,6,7],[0,11,6],[0,7,9],[1,5,4],[1,4,11],[1,9,5],[2,3,8],[2,10,3],
   [2,7,6],[2,6,10],[2,8,7],[3,4,5],[3,10,4],[3,5,8],[4,10,11],[5,9,8],[6,11,10],[7,8,9]];
 
-// vertices of an dodecahedron enclosed in a sphere of diameter d
+// vertices of an dodecahedron enclosed by a sphere of diameter d
 function dodeca(d=10) = let(phi=golden(), u=[-1,1], v=1/[phi,-phi]) concat([for (i=u,j=u,k=u) [i,j,k]], [for (k=[0:2],j=v,i=v) [[0,i,1/j],[i,1/j,0],[1/j,0,i]][k]])*d/sqrt(3)/2;
 function dodeca_faces() = [[0,11,10,2,19],[0,15,14,4,11],[0,19,18,1,15],[1,18,3,8,9],[2,10,6,12,13],[2,13,3,18,19],[3,13,12,7,8],[4,14,5,16,17],[4,17,6,10,11],[5,9,8,7,16],[5,14,15,1,9],[6,17,16,7,12]];
 
@@ -930,21 +979,22 @@ let(c=ifundef(basis, cross(from, v)), q=append(c, from*v), r=unit(override(q, 3,
   [  2*r[0]*r[1]-2*r[2]*r[3], 1-2*r[0]*r[0]-2*r[2]*r[2],   2*r[1]*r[2]+2*r[0]*r[3]],
   [  2*r[0]*r[2]+2*r[1]*r[3],   2*r[1]*r[2]-2*r[0]*r[3], 1-2*r[0]*r[0]-2*r[1]*r[1]]];
 
-// affine transformations (left to right order), e.g. [1,2,3,1]*m4_rotate([10,20,30]) or m4_transform(points, m1*m2*m3)
+// affine transformations (left to right order), e.g. [4,5,6,1]*m4_euler([10,20,30]) or m4_transform(points, m1*m2*m3)
 
 function m4_transform(points, m4) = force3d([for (p=points) [p[0],p[1],ifundef(p[2],0),1] * m4]);
-
-function m4_translate(v) = [[1, 0, 0, 0],
-         [0, 1, 0, 0],
-         [0, 0, 1, 0],
-         [v[0], v[1], v[2], 1]];
-
-function m4_scale(s) = [[s[0], 0, 0, 0],
-         [0, s[1], 0, 0],
-         [0, 0, s[2], 0],
-         [0, 0, 0, 1]];
-
-function m4_rotate(a) = [ // Euler angles suffer from gimbal lock issues, should use vector-based rotations instead
+function m4_ident(k=1) = [[k,0,0,0], [0,k,0,0], [0,0,k,0], [0,0,0,1]];
+function m4_scale(s=[1,1,1]) = [[s[0],0,0,0], [0,s[1],0,0], [0,0,s[2],0], [0,0,0,1]];
+function m4_translate(v=[0,0,0]) = [[1,0,0,0], [0,1,0,0], [0,0,1,0], [v[0],v[1],v[2],1]];
+function m4_roll(a) = [[1,0,0,0], [0,cos(a),sin(a),0], [0,-sin(a),cos(a),0], [0,0,0,1]]; // around x-axis
+function m4_pitch(a) = [[cos(a),0,-sin(a),0], [0,1,0,0], [sin(a),0,cos(a),0], [0,0,0,1]]; // around y-axis
+function m4_spin(a) = [[cos(a),sin(a),0,0], [-sin(a),cos(a),0,0], [0,0,1,0], [0,0,0,1]]; // around z-axis
+function m4_rotate(v, from=[0,0,1], basis) = let(s=colinear(v, from)) s!=0 ? mm_ident(s) :
+  let(c=ifundef(basis, cross(from, v)), q=append(c, from*v), r=unit(override(q, 3, q[3]+norm(q)))) [
+  [1-2*r[1]*r[1]-2*r[2]*r[2],   2*r[0]*r[1]+2*r[2]*r[3],   2*r[0]*r[2]-2*r[1]*r[3], 0],
+  [  2*r[0]*r[1]-2*r[2]*r[3], 1-2*r[0]*r[0]-2*r[2]*r[2],   2*r[1]*r[2]+2*r[0]*r[3], 0],
+  [  2*r[0]*r[2]+2*r[1]*r[3],   2*r[1]*r[2]-2*r[0]*r[3], 1-2*r[0]*r[0]-2*r[1]*r[1], 0],
+  [                        0,                         0,                         0, 1]];
+function m4_euler(a=[0,0,0]) = [ // Euler angles suffer from gimbal lock, should use vector-based rotations instead
          [1, 0, 0, 0],
          [0, cos(a[0]), sin(a[0]), 0],
          [0, -sin(a[0]), cos(a[0]), 0],
@@ -958,12 +1008,7 @@ function m4_rotate(a) = [ // Euler angles suffer from gimbal lock issues, should
          [0, 0, 1, 0],
          [0, 0, 0, 1]]; // step 3: rotate a[2] degrees about z
 
-function m4_spin(a) = [[cos(a),sin(a),0,0],
-         [-sin(a),cos(a),0,0],
-         [0,0,1,0],
-         [0,0,0,1]]; // around z-axis
-
-// transformations using multmatrix() (right to left order), e.g. multmatrix(m3*m2*m1) children();
+// object transformations using multmatrix() (right to left order), e.g. multmatrix(m3*m2*m1) children();
 
 function mm_ident(k=1) = [[k,0,0,0], [0,k,0,0], [0,0,k,0], [0,0,0,1]];
 function mm_scale(s=[1,1,1]) = [[s[0],0,0,0], [0,s[1],0,0], [0,0,s[2],0], [0,0,0,1]];
@@ -998,7 +1043,7 @@ function q_mult(q, r) = [ // multiplication
 function q_ident() = [1,0,0,0];
 
 // quaternion causing a rotation of angle a about axis n
-function q_revolve(a, n=[0,0,1]) = let(a2=a/2, n=unit(rank(n, 3))) prepend(n*sin(a2), cos(a2));
+function q_revolve(a, n=[0,0,1]) = let(a2=a/2, n=unit(redim(n, 3))) prepend(n*sin(a2), cos(a2));
 
 // quaternion that maps u to v, with optional n, the axis of rotation when u and v are antiparallel (if n is undefined, an arbitrary axis is picked which may be fine for a single vector but could cause discontinuity in a coherent set)
 function q_map(u, v, n) = let(c=colinear(u, v)) c>0 ? q_ident() : c<0 ? let(n=ifundef(n, orth(u))) prepend(unit(n), 0) : let(w=cross(u, v), q=prepend(w, u*v)) unit(plus(q, 0, norm(q)));
@@ -1038,7 +1083,7 @@ function morph(p1, p2, t, f=1) = p1==p2 && f==1 ? p1 : [for (i=[0:len(p1)-1]) le
 // scaler=optional scaling function [[a,b],...] where a=scaling factor, b=proportion in [0,1)
 // result is a set of layers ready for layered_block()
 function morph_between(p1, p2, h, scaler, n, s=0, z=0, end=1, curved=true) = 
-let(n=ifundef(n, max(len(p1), len(p2))), q1=cyclic(oversample(p1, n), s), q2=oversample(p2, n))
+let(n=ifundef(n, max(len(p1), len(p2))), q1=cyclic(resample(p1, n), s), q2=resample(p2, n))
   scaler==undef ?
   [for (t=quanta(ceil(abs(h)/2/$fs), end=end)) ascend3d(morph(q1, q2, t, curved?t:1), t*h+z)] :
   [for (g=scaler) ascend3d(morph(q1, q2, g[1])*g[0], g[1]*h+z)];
@@ -1047,7 +1092,7 @@ let(n=ifundef(n, max(len(p1), len(p2))), q1=cyclic(oversample(p1, n), s), q2=ove
 // result is a set of layers ready for layered_block()
 function morph_multiple(profiles, intervals, n, curved=false, z=0, i=0) =
 let(n=ifundef(n, max([for (p=profiles) len(p)])))
-  i == len(profiles)-1 ? [ascend3d(oversample(last(profiles), n), z)] : concat(
+  i == len(profiles)-1 ? [ascend3d(resample(last(profiles), n), z)] : concat(
     morph_between(profiles[i], profiles[i+1], intervals[i], n=n, z=z, end=0.999, curved=opt(curved, i)),
     morph_multiple(profiles, intervals, n, curved, z+ifundef(intervals[i],0), i+1)
   );
@@ -1066,44 +1111,43 @@ function morph_cookie(profile, h, b=0, origin=[0,0], f=0) =
 // sweep_layers - sweep a set of layers along path (no morphing)
 // ====================================================================
 
-function sweep_profile(profile, path, loop=false, e=1.2, s=0, i=0, a, m, t) = let(k=len(path)) i==k ? [] :
-  let(profile=i==0 ? force3d(profile) : profile, a=i==0 ? m3_spin(sweep_twist(path, loop, e, k, s)) : a)
-  let(tt=sweep_tangent(path, loop, e, k, i), mm=(i==0 ? m3_rotate([0,-1,0])*m3_rotate(tt, [0,1,0]) : m*m3_rotate(tt, t)))
-  concat(sweep_profile(profile, path, loop, e, s, i+1, a, a*mm, tt), [shift3d(profile*mm, path[i])]);
+function sweep_profile(profile, path, loop=false, s=0, i=0, a, m, t) = let(k=len(path)) i==k ? [] :
+  let(profile=i==0 ? force3d(profile) : profile, a=i==0 ? m3_spin(sweep_twist(path, loop, k, s)) : a)
+  let(tt=sweep_tangent(path, loop, k, i), mm=(i==0 ? m3_rotate([0,-1,0])*m3_rotate(tt, [0,1,0]) : m*m3_rotate(tt, t)))
+  concat(sweep_profile(profile, path, loop, s, i+1, a, a*mm, tt), [shift3d(profile*mm, path[i])]);
 
 // f in [0,1] determines how steep an angle has to be before toning it down by distortion (the less the steeper)
-function sweep_pipe(profile, path, loop=false, e=1, s=0, f=0.3, i=0, a, m, t) = let(k=len(path)) i==k ? [] :
-  let(c=i>0 ? profile : force3d(profile), a=i>0 ? a : m3_spin(sweep_twist(path, loop, e, k, s)))
+function sweep_pipe(profile, path, loop=false, s=0, f=0.3, i=0, a, m, t) = let(k=len(path)) i==k ? [] :
+  let(c=i>0 ? profile : force3d(profile), a=i>0 ? a : m3_spin(sweep_twist(path, loop, k, s)))
   let(p0=path[(i+k-1)%k], p1=path[i%k], p2=path[(i+1)%k])
   let(v1=unit(loop ? p1-p0 : path[max(1,i)]-path[max(0,i-1)]))
   let(v2=unit(loop ? p2-p1 : path[min(k-1,i+1)]-path[min(k-2,i)]))
   let(tt=-v1==v2?v2:v1+v2, mm=i>0 ? m*m3_rotate(tt, t) : m3_rotate([0,-1,0])*m3_rotate(tt, [0,1,0]))
   let(d=unit(v2-v1)*(v1*v2<0 && norm(tt)<f?0.99:0))
   let(cp=[for (j=c*mm*m3_rotate(v1,tt)) let(q=proj3(j, v1, tt)) q-(q*d)*d+p1])
-  concat(sweep_pipe(c, path, loop, e, s, f, i+1, a, a*mm, tt), [cp]);
+  concat(sweep_pipe(c, path, loop, s, f, i+1, a, a*mm, tt), [cp]);
 
-function sweep_wall(profile, path, loop=false, e=1.2, s=0, i=0, m, t) = let(k=len(path)) i==k ? [] :
-  let(profile=i==0 ? force3d(profile) : profile, ti=sweep_tangent(path, loop, e, k, i))
+function sweep_wall(profile, path, loop=false, s=0, i=0, m, t) = let(k=len(path)) i==k ? [] :
+  let(profile=i==0 ? force3d(profile) : profile, ti=sweep_tangent(path, loop, k, i))
   let(tt=[ti[0],ti[1],0], mm=(i==0 ? m3_rotate([0,-1,0])*m3_rotate(tt, [0,1,0]) : m*m3_rotate(tt, t)))
-  concat(sweep_wall(profile, path, loop, e, s, i+1, mm, tt), [shift3d(profile*mm, path[i])]);
+  concat(sweep_wall(profile, path, loop, s, i+1, mm, tt), [shift3d(profile*mm, path[i])]);
 
-function sweep_layers(layers, path, loop=false, e=1.2, s=0, twist=true, i=0, a, m, t) = let(k=len(path)) i==k ? [] :
-  let(a=i==0 ? twist ? m3_spin(sweep_twist(path, loop, e, k, s)) : m3_ident() : a)
-  let(c=force3d(layers[floor(len(layers)*i/k)], 0), ti=sweep_tangent(path, loop, e, k, i))
-  let(tt=twist ? ti : [ti[0],ti[1],0], mm=(i==0 ? m3_rotate(tt) : m*m3_rotate(tt, t)))
-  concat([shift3d(c*mm, path[i])], sweep_layers(layers, path, loop, e, s, twist, i+1, a, a*mm, tt));
+function sweep_layers(layers, path, loop=false, s=0, twist=true, i=0, a, m, t) = let(k=len(path)) i==k ? [] :
+  let(a=i==0 ? twist ? m3_spin(sweep_twist(path, loop, k, -s)) : m3_ident() : a)
+  let(c=layers[floor(len(layers)*i/k)], ti=sweep_tangent(path, loop, k, i), tt=twist ? ti : [ti[0],ti[1],0]) 
+  let(mm=(i==0 ? m3_rotate([0,-1,0])*m3_rotate(tt, [0,1,0]) : m*m3_rotate(tt, t)))
+  concat(sweep_layers(layers, path, loop, s, twist, i+1, a, a*mm, tt), [shift3d(force3d(c, 0)*mm, path[i])]);
 
-// subroutine to find tangent at point i of path, e=bias, k=length of path
-function sweep_tangent(path, loop, e, k, i) = 
+// subroutine to find tangent at point i of path, k=length of path
+function sweep_tangent(path, loop, k, i) = 
   let(u=loop ? path[i]-path[mod(i-1,k)] : path[max(1,i)]-path[max(0,i-1)])
   let(v=loop ? path[mod(i+1,k)]-path[i] : path[min(k-1,i+1)]-path[min(k-2,i)]) unit(u)+unit(v);
-//  e==1 ? u+v : u*pow(norm(v),e)+v*pow(norm(u),e);
 
-// subroutine to find the average twist along the path, e=bias, k=length of path, s=additional twist (1=>360º)
-function sweep_twist(path, loop, e, k, s=0, i=0, m, t=[0,0,1]) = loop==false ? s*360/k :
-  i==k ? let(t0=unit(sweep_tangent(path, loop, e, k, 0)), v0=orth(t0)) (s*360-s_angle3d(v0, v0*m, t0)%180)/k :
-  let(tt=sweep_tangent(path, loop, e, k, i))
-  sweep_twist(path, loop, e, k, s, i+1, i==0 ? m3_ident() : m*m3_rotate(tt, t), tt);
+// subroutine to find the average twist along the path, k=length of path, s=additional twist (1=>360º)
+function sweep_twist(path, loop, k, s=0, i=0, m, t=[0,0,1]) = loop==false ? s*360/k :
+  i==k ? let(t0=unit(sweep_tangent(path, loop, k, 0)), v0=orth(t0)) (s*360-s_angle3d(v0, v0*m, t0)%180)/k :
+  let(tt=sweep_tangent(path, loop, k, i))
+  sweep_twist(path, loop, k, s, i+1, i==0 ? m3_ident() : m*m3_rotate(tt, t), tt);
 
 // ====================================================================
 // 2D areas
@@ -1131,7 +1175,7 @@ module grid2d(w, d, s=10, t=1, center=true) {
 // a 2D child, if provided, will clip its boundry
 module voronoi(d, t=1, r=1, f=0.6, seed) {
   seed=ifundef(seed, ceil(rands(0, 10000, 1)[0]));
-  echo(seed=seed);
+  if ($debug) echo(seed=seed);
   n = ceil(pow(d, 1.5)/10);
   e = rands(-d*f, d*f, n*2, seed);
   points = [for (i=[0:n-1]) [e[i],e[i+n]]];
@@ -1202,7 +1246,7 @@ module pyramind(profile, h=5, inset=3, scale=0, origin) {
 
 // trace a thread along profile (negatively if children exists), r=tapering (as a ratio of whole path)
 module trace(profile, d=0.2, r=0, loop=false, fuse=true) {
-  p = force3d(fuse ? fuse(profile) : profile);
+  p = force3d(fuse ? fuse(profile, loop=loop) : profile);
   s = r>0 ? [for (t=quanta(len(profile)-1, end=1)) [scale_guide(t, r),t]] : undef;
   difference() {
     if ($children) children();
@@ -1297,7 +1341,7 @@ module mark(points, s=0.5, z=0, color="red", font=0) {
 // plotting a profile (list of v2 or v3 points) as a 3D pipe, d=cross-section diameter, dot=enable dots,
 // dup=debug overlaps, div=maximum segment size (avoids stack overflow; imperfections may arise where segments meet)
 module plot(profile, d=0.2, loop=false, color="gold", dot=true, dup=false, div=1000) {
-  p = force3d(fuse(profile));
+  p = force3d(fuse(profile, loop=loop));
   m = len(p);
   if (m>0) {
     if (m>1) color(color) {
@@ -1310,7 +1354,7 @@ module plot(profile, d=0.2, loop=false, color="gold", dot=true, dup=false, div=1
       }
     }
     if (dot && $preview) {
-      for (i=[0:m-1]) color(i==0?"blue":i==m-1?"green":"brown") translate(p[i]) sphere(d=d+min(d*0.5,i==0?2:1), $fn=_fn(d));
+      for (i=[0:m-1]) color(i==0?"blue":i==m-1?"tan":"brown") translate(p[i]) sphere(d=d+min(d*0.5,i==0?2:1), $fn=_fn(d));
     }
     if (dup && $preview) { // for debugging
       for (i=seams(profile, true)) let(v=profile[i]) color(color) arrow([0,0,-3], [v[0],v[1],ifundef(v[2],0)+3.2]);
@@ -1412,7 +1456,7 @@ module lever(locs=[[-10,0],[10,0]], h=2, m=3, t=9, hole=true, curved=false) {
   }
 }
 
-// a spring ascending anticlockwisely with outer diameter m, height h, wire diameter w, starting angle a
+// a spring ascending counterclockwisely with outer diameter m, height h, wire diameter w, starting angle a
 module spring(m, pitch=5, h=10, w=2, a=0, clip=true) {
   r = m/2;
   n = h/pitch;
@@ -1429,9 +1473,9 @@ module spring(m, pitch=5, h=10, w=2, a=0, clip=true) {
 module label(txt, p=[0,0,0], xsize=0, ysize=0, h=1, inflate=0, center=false, dir="ltr", font="Hiragino Maru Gothic ProN", sf=0.5) {
   txt = is_list(txt) ? txt : [txt];
   n = len(txt);
-  th = ysize / (n+(n-1)*sf);
-  rh = ysize==0 ? 15 : th * (1+sf);
-  for (i=[0:n-1]) translate(as3d(p)+[center?0:xsize/2,-rh*i+(center&&n>1?ysize/2:0)])
+  th = ysize / (n+(n-1)*sf); // text height
+  rh = ysize==0 ? 15 : th * (1+sf); // row height
+  for (i=[0:n-1]) translate(as3d(p)+[center?0:xsize/2,-rh*i+(center&&n>1?ysize/2:0),0])
     linear_extrude(h, convexity=10) offset(inflate) resize([xsize,th]*0.99, auto=true)
     text(txt[i], halign=center||xsize>0?"center":"left", valign=n==1?(center?"center":"bottom"):"top", direction=dir, font=font);
 }
@@ -1439,7 +1483,7 @@ module label(txt, p=[0,0,0], xsize=0, ysize=0, h=1, inflate=0, center=false, dir
 //  translate(p) linear_extrude(h, convexity=10) offset(inflate) resize([xsize,ysize], auto=true) text(txt, halign=center?"center":"left", valign=center?"center":"bottom", direction=dir, font=font);
 //}
 
-// a text displaying signboard, ysize is auto if zero, passes $dm to children
+// a text-displaying signboard, ysize is auto if zero, d=text depth, passes $dm=[x,y,h,d,r,margin] to children
 module signboard(txt, xsize=50, ysize=0, h=3, d=1, inflate=0.1, center=true, dir="ltr", font="Hiragino Maru Gothic ProN", r, margin) {
   k = len(txt);
   m = ifundef(margin, k==0 ? 0 : k<3 ? xsize/5 : xsize/(k*2));
@@ -1455,14 +1499,15 @@ module signboard(txt, xsize=50, ysize=0, h=3, d=1, inflate=0.1, center=true, dir
 }
 
 module icosasphere(d, n=1, v, f) {
-function vsub(a, b, c, r) = let(d=(a+b)/2, e=(b+c)/2, f=(c+a)/2) [a, b, c, r*d/norm(d), r*e/norm(e), r*f/norm(f)];
+  function vsub(a, b, c, r) = let(d=(a+b)/2, e=(b+c)/2, f=(c+a)/2) [a, b, c, r*d/norm(d), r*e/norm(e), r*f/norm(f)];
   v = ifundef(v, icosa(d));
   f = ifundef(f, icosa_faces());
   if (n == 0) polyhedron(v, f, convexity=10);
   else {
-    vv = flatten([for (t=f) vsub(v[t[0]], v[t[1]], v[t[2]], d/2)]);
-    ff = flatten([for (i=[0:6:len(vv)-1]) [[i,i+3,i+5],[i+1,i+4,i+3],[i+2,i+5,i+4],[i+3,i+4,i+5]]]);
-    icosasphere(d, n-1, vv, ff);
+    vv = [for (t=f) each vsub(v[t[0]], v[t[1]], v[t[2]], d/2)];
+    ff = [for (i=[0:6:len(vv)-1]) each [[i,i+3,i+5],[i+1,i+4,i+3],[i+2,i+5,i+4],[i+3,i+4,i+5]]];
+    rs = norm(vv[ff[0][0]] - vv[ff[0][1]]); // check face size
+    icosasphere(d, rs<$fs?0:n-1, vv, ff);
   }
 }
 
@@ -1474,7 +1519,7 @@ module icosabouquet(d, n=1, v, f) {
     r = d/2;
     s = len(v);
     vv = concat(v, [for (t=f) let(c=centroid3d([for (i=t) v[i]])) c*r/norm(c)]);
-    ff = [for (i=keys(f)) for (j=[0:2]) [s+i, f[i][j], f[i][(j+1)%3]]];
+    ff = [for (i=incline(f)) for (j=[0:2]) [s+i, f[i][j], f[i][(j+1)%3]]];
     icosabouquet(d, n-1, vv, ff);
   }
 }
@@ -1487,7 +1532,7 @@ module dodecasphere(d, n=1, v, f) {
     r = d/2;
     s = len(v);
     vv = concat(v, [for (t=f) let(c=centroid3d([for (i=t) v[i]])) c*r/norm(c)]);
-    ff = [for (i=keys(f)) for (j=keys(f[i])) [s+i, f[i][j], f[i][(j+1)%5]]];
+    ff = [for (i=incline(f)) for (j=incline(f[i])) [s+i, f[i][j], f[i][(j+1)%5]]];
     icosasphere(d, n-1, vv, ff);
   }
 }
@@ -1500,7 +1545,7 @@ module dodecabouquet(d, n=1, v, f) {
     r = d/2;
     s = len(v);
     vv = concat(v, [for (t=f) let(c=centroid3d([for (i=t) v[i]])) c*r/norm(c)]);
-    ff = [for (i=keys(f)) for (j=keys(f[i])) [s+i, f[i][j], f[i][(j+1)%5]]];
+    ff = [for (i=incline(f)) for (j=incline(f[i])) [s+i, f[i][j], f[i][(j+1)%5]]];
     icosabouquet(d, n-1, vv, ff);
   }
 }
@@ -1513,16 +1558,19 @@ module dodecabouquet(d, n=1, v, f) {
 function peek(exp, val) = let(e=ifundef(val, exp)) echo(peek=e) e;
 
 // echo value conditionally for debugging, e.g. val=tee(a*b+c, a>b)
-function tee(exp, enable=false, label="tee") = enable ? echo(str(label, "=", strc(exp))) exp : exp;
+function tee(exp, label, enable=false) = enable ? echo(label ? str(label, "=", strc(exp)) : exp) exp : exp;
 
-// change color of children
+// change color and opacity of children
 module red(a=1) color("red", alpha=a) children();
 module green(a=1) color("green", alpha=a) children();
 module blue(a=1) color("blue", alpha=a) children();
 module cyan(a=1) color("cyan", alpha=a) children();
 module gold(a=1) color("gold", alpha=a) children();
+module pink(a=1) color("pink", alpha=a) children();
+module black(a=1) color("black", alpha=a) children();
+module magenta(a=1) color("magenta", alpha=a) children();
 
-// change transparency of children
+// change opacity of children
 module fade(alpha=0.5) color(alpha=alpha) children();
 
 // list adjacent duplicates
@@ -1530,6 +1578,15 @@ module lsdup(array) {
   s = seams(array);
   if (len(s)==0) echo("No dup");
   else echo(dup=s, count=len(s), size=len(array));
+}
+
+// list bad points in array or mesh
+module lsbad(array, layer=0) {
+  for (i=[0:len(array)-1]) {
+    e = array[i];
+    if (rank(e)>1) lsbad(e, layer+1);
+    else if (!valid3d(e)) echo(layer=layer, i=i, e);
+  }
 }
 
 // echo each element on a separate line
@@ -1625,17 +1682,18 @@ module drill(locs=[[0,0,0]], xx, yy, zz, m=3, h, t, g=0, enable=true, debug=fals
 }
 
 // negative space for a vertical screw (see punch())
-// head,tail=countersink [outer diameter, outer depth, inner depth] (e.g. [5.5,0.5,2] for M3)
+// head,tail=countersink [outer diameter, outer depth, inner depth] (e.g. [6,0.5,2] for M3)
 // ext=extension on both ends to allow a clean cut
 module hole(xy=[0,0], zz=[0,3], m=3, head, tail, gap, ext=0.1) {
   mm = m + ifundef(gap, 0.2); // compensate for printed hole shrinking
   translate([xy[0],xy[1],zz[0]-ext]) {
-    $fn=_fn(m/2);
+    xo = mm/2-ext-0.01;
+    $fn = mof(_fn(m/2));
     cylinder(d=mm, h=abs(zz[1]-zz[0])+ext*2);
-    if (head != undef) translate([0,0,zz[1]-zz[0]+ext*2]) rotate_extrude(angle=360, convexity=9) 
-      polygon([[mm/2-ext,0],[head[0]/2+ext,0],[head[0]/2+ext,-head[1]-ext*2],[mm/2-ext,-head[2]-ext*2]], convexity=9);
-    if (tail != undef) rotate_extrude(angle=360, convexity=9) 
-      polygon([[mm/2-ext,0],[tail[0]/2+ext,0],[tail[0]/2+ext,tail[1]+ext*2],[mm/2-ext,tail[2]+ext*2]], convexity=9);
+    if (head != undef) translate([0,0,zz[1]-zz[0]+ext*2]) rotate_extrude(angle=360, convexity=9)
+      polygon([[xo,0],[head[0]/2+ext,0],[head[0]/2+ext,-head[1]-ext*2],[xo,-head[2]-ext*2]], convexity=9);
+    if (tail != undef) rotate_extrude(angle=360, convexity=9)
+      polygon([[xo,0],[tail[0]/2+ext,0],[tail[0]/2+ext,tail[1]+ext*2],[xo,tail[2]+ext*2]], convexity=9);
   }
 }
 
@@ -1754,6 +1812,18 @@ module mag_socket(h=1.4, d=4.3) {
   ascend(h<0?-0.01:-h+0.01) fillet_extrude(ring_path(d), h=abs(h), xz0=[h<0?-0.2:0,0.4], xz1=[h<0?0:-0.2,0.4]);
 }
 
+// clip within a volume defined by dm above xy-plane, then sliced at cx, cy and cz 
+module clip(dm=[150,150,150], cx, cy, cz, origin, enable=true, debug=false) {
+  intersection() {
+    children();
+    if (enable) highlight(debug) translate([0,0,dm[2]/2]+(origin==undef?[0,0,0]:origin)) intersection() {
+      c = [cx==undef?0:cx-dm[0]/2,cy==undef?0:dm[1]/2+cy,cz==undef?0:cz-dm[2]];
+      translate(c) cube(dm+[0.01,0.01,0.01], center=true);
+      cube(dm+[0.02,0.02,0.02], center=true);
+    }
+  }
+}
+
 // remove anything above horizontal plane at z=h
 module clip_ceiling(h=0, w=150, depth=150, enable=true, debug=false) {
   if (enable) intersection() {
@@ -1808,7 +1878,7 @@ module chop(h=0, apart=100, w=150, depth=150, debug=false, select) child(select)
 // scale individual dimensions of children (size dm) by absolute amount defined by sm
 module scale_by(dm, sm, origin) {
   c = ifundef(origin, [0,0,dm[2]/2]);
-  sm = dim(sm)==0 ? [sm,sm,sm] : as3d(sm);
+  sm = rank(sm)==0 ? [sm,sm,sm] : as3d(sm);
   sx = dm[0]==0?1:(dm[0]-sm[0]*2)/dm[0];
   sy = dm[1]==0?1:(dm[1]-sm[1]*2)/dm[1];
   sz = dm[2]==0?1:(dm[2]-sm[2]*2)/dm[2];
@@ -1852,10 +1922,10 @@ module cut_bin(dm, wall, cut=0, apart=100, flip=true, origin, debug=false) {
   clip_ceiling(cut, w=w, depth=dm[2]+10) hollow(dm, wall, origin) children();
 }
 
-// make a case with lid from any profile
+// make a case with lid from any profile (see also basic_case, cover_case in objects.scad)
 // h=case height, b=bin height, t=thickness, j=joiner height, g=joiner gap
-module case_extrude(profile, h=30, b=24, t=2.4, j=4, g=0.1, bin=true, lid=true, debug=false) {
-  sp = span(minmax(slice(profile, 0))) + t*2 + 10;
+module case_extrude(profile, h=30, b=24, t=2.8, j=4, g=0.1, bin=true, lid=true, debug=false) {
+  sp = span(minmax(slice(profile, 0))) + t*2 + 20;
   clip_xz(enable=debug) scatter(sp, enable=!debug) {
     if (bin) {
       basin(profile, b-g, -t);
@@ -1863,8 +1933,12 @@ module case_extrude(profile, h=30, b=24, t=2.4, j=4, g=0.1, bin=true, lid=true, 
     }
     if (lid) flipy(h=h, enable=!debug) ascend(h) {
       ascend(-h+b+0.01-j) shell(profile, h-b-t+j, -1.2, inflate=-t-g); // joiner
-      ascend(-h+b+0.01) shell(profile, h-b-t, -t-1.2); // outer
-      ascend(-t) fillet_extrude(soften(profile, 2, loop=true), t, [0,0], [-1,2]); // top
+      //ascend(-h+b+0.01) shell(profile, h-b-t, -t-1.2); // outer
+      ascend(-h+b+0.02) deepen(h-b-t) difference() { // outer
+        polygon(profile);
+        offset(-t-1.19) polygon(profile);
+      }
+      ascend(-t) fillet_extrude(profile, t, [0,0], [-1,2]); // top
     }
   }
 }
@@ -1955,12 +2029,11 @@ module mesh_block(points, h=0, zscale=1) {
 
 // generate a mesh block from a set of points representing n layers of contours (no need to be coplanar)
 // layers=[L1, L2, ... Lm] where each L is a list of 3D points [p1, p2, p3, ... pn] of same length n
-// each layer is expected to be counterclockwise wrt layer progression
-module layered_block(layers, loop=false) {
+module layered_block(layers, loop=false, invert=false) {
   k = len(layers);
   n = len(layers[0]);
   if (k>0 && n>0) {
-    v = flatten(layers);
+    v = [for (i=indices(layers, invert)) each layers[i]];
     g = len(v);
     f = [for (j=[0:k-(loop?1:2)], i=[0:n-1]) let(a=n*j, b=n*((j+1)%k), c=(i+1)%n) each [[a+i,b+c,a+c],[a+i,b+i,b+c]]];
     polyhedron(v, loop ? f : concat(f, [[for (i=[0:n-1])i], [for (i=[1:n])g-i]]), convexity=10);
@@ -1983,8 +2056,8 @@ module layered_dome(layers, inner=0.8, skip=3) {
 }
 
 // plot layers
-module plot_layers(layers, d=0.2, loop=false, color) {
-  for (l=layers) plot(l, d=d, loop=loop, color=color);
+module plot_layers(layers, d=0.2, loop=false, color, dup=false) {
+  for (l=layers) plot(l, d=d, loop=loop, color=l==layers[0]?"blue":color, dup=dup);
 }
 
 // plot slopes
@@ -1992,18 +2065,18 @@ module plot_slopes(layers, d=0.2, color) {
   for (k=isomesh(layers)) plot(k, d=d, loop=false, color=color);
 }
 
-// sweep a profile along 3D path (optional scaler [[a,b],...] where a=scaling factor, b=proportion in [0,1])
+// sweep a profile along 3D path, scaler=[[f,t],...] where f=scaling factor, t=proportion in [0,1], s=twist
 module sweep(profile, path, scaler, s=0, loop=false) {
   if (profile==undef || path==undef)
     debug("Error: sweep() - profile and path parameters required");
   else if (len(path)>1) {
     p = force3d(path);
-    if (scaler==undef && len(path[0])==2)
-      layered_block(sweep_wall(profile, p, loop=loop, s=s, e=1), loop=loop);
+    if (scaler==undef && len(path[0])==2) // 2D path
+      layered_block(sweep_wall(profile, p, loop=loop, s=s), loop=loop);
     else if (scaler==undef)
       layered_block(sweep_profile(profile, p, loop=loop, s=s), loop=loop);
     else {
-      layers = morph_between(p1=profile, p2=profile, h=path_length(p), scaler=scaler, curved=false);
+      layers = [for (f=scaler) profile*f[0]];
       layered_block(sweep_layers(layers, p, loop=loop, s=s), loop=loop);
     }
   }
@@ -2083,10 +2156,10 @@ module ulam_scatter(xy) {
 module path_scatter(path, n, loop=false, k, i=0, c=0, nc, a, m, t) {
   k = ifundef(k, len(path));
   if (i<k) {
-    a = ifundef(a, mm_pitch(-sweep_twist(path, loop, 1, k)));
+    a = ifundef(a, mm_pitch(-sweep_twist(path, loop, k)));
     n = ifundef(n, $children==1 ? k : $children);
     nc = ifundef(nc, $children);
-    tt = sweep_tangent(path, loop, 1, k, i);
+    tt = sweep_tangent(path, loop, k, i);
     mm = i==0 ? mm_rotate(tt, [0,-1,0]) : mm_rotate(tt, t)*m;
     hit = i==round(k*c/n);
     if (hit) translate(path[i]) multmatrix(mm) children(c%nc);
@@ -2293,33 +2366,70 @@ module fillet_cube(dm, r=5, center=false) {
   sx = opt(dm, 0);
   sy = opt(dm, 1);
   sz = opt(dm, 2);
-  rr = min(r, sx/2, sy/2, sz/2); // reduce fillet accordingly
+  rr = min(r, sx/2, sy/2, sz/2); // reduce radius accordingly
   if (rr > 0) {
     dv = ceil(rr/$fs);
-    m0 = [for (j=quanta(dv, end=1)) let(s=rr*sin(j*90)) flatten([for (i=[0:3])
+    m0 = [for (j=quanta(dv, end=1)) let(s=rr*sin(j*90)) [for (i=[0:3])
         let(c=[(sx-rr*2)*(abs(i-1.5)-1),(sy-rr*2)*(i%2+1-i)/2, rr*(1-cos(j*90))], q=i*90)
-        [for (a=quanta(dv, end=1, max=90)) s*[cos(q+a),sin(q+a),0]+c]])];
+        each [for (a=quanta(dv, end=1, max=90)) s*[cos(q+a),sin(q+a),0]+c]]];
     m1 = [for (s=reverse(m0)) [for (p=s) [p[0],p[1],sz-p[2]]]];
     ascend(center?-sz/2:0) layered_block(concat(m0, m1));
   }
 }
 
-// extrude an anticlockwise profile with configurable fillets at bottom (xz0) and top (xz1)
+// extrude an counterclockwise profile with configurable fillets at bottom (xz0) and top (xz1)
 // the default will round both top and bottom (set x in xz to zero for no fillet)
+//module fillet_extrude(profile, h=1.6, xz0=[-1,1], xz1=[-1,-1], r0, r1, r, convex=false, core=true) {
+//  if (h>0) {
+//    a0 = r0==undef ? r==undef ? abs(xz0[1]) : abs(r) : abs(r0);
+//    a1 = r1==undef ? r==undef ? abs(xz1[1]) : abs(r) : abs(r1);
+//    x0 = r0==undef ? r==undef ? xz0[0] : -r : -r0;
+//    x1 = r1==undef ? r==undef ? xz1[0] : -r : -r1;
+//    z0 = a0==0 && x0==0 ? 0 : min(h*a0/(a0+a1)-0.01, a0);
+//    z1 = a1==0 && x1==0 ? 0 : min(h*a1/(a0+a1)-0.01, a1);
+//    c0 = [for(i=fillet_path(x0, z0, convex, false)) force3d(offset2d(profile, i[0]), i[1])];
+//    c1 = [for(i=fillet_path(x1, -z1, convex, false)) force3d(offset2d(profile, i[0]), i[1]+h)];
+//    nf = x0>0 && x1>0;
+//    cc = nf ? profile : x0<x1 ? c0[0] : c1[0];
+//    m =concat([if (nf||x0>x1) force3d(cc, 0)], c0, reverse(c1), [if (nf||x0<x1) force3d(cc, h)]);
+//    layered_block(m, !core);
+//  }
+//}
 module fillet_extrude(profile, h=1.6, xz0=[-1,1], xz1=[-1,-1], r0, r1, r, convex=false, core=true) {
   if (h>0) {
     a0 = r0==undef ? r==undef ? abs(xz0[1]) : abs(r) : abs(r0);
     a1 = r1==undef ? r==undef ? abs(xz1[1]) : abs(r) : abs(r1);
     x0 = r0==undef ? r==undef ? xz0[0] : -r : -r0;
     x1 = r1==undef ? r==undef ? xz1[0] : -r : -r1;
-    z0 = a0==0 && x0==0 ? 0 : min(h*a0/(a0+a1)-0.01, a0);
-    z1 = a1==0 && x1==0 ? 0 : min(h*a1/(a0+a1)-0.01, a1);
-    c0 = [let(c=fillet_path(x0, z0, convex, false)) for(i=c) force3d(offset2d(profile, i[0]), i[1])];
-    c1 = [let(c=fillet_path(x1, -z1, convex, false)) for(i=c) force3d(offset2d(profile, i[0]), i[1]+h)];
-    nf = x0>0 && x1>0;
-    cc = nf ? profile : x0<x1 ? c0[0] : c1[0];
-    m =concat([if (nf||x0>x1) force3d(cc, 0)], c0, reverse(c1), [if (nf||x0<x1) force3d(cc, h)]);
+    z0 = a0==0 || x0==0 ? 0 : min(h*a0/(a0+a1), a0);
+    z1 = a1==0 || x1==0 ? 0 : min(h*a1/(a0+a1), a1);
+    s0 = x0*z0==0; // straight
+    s1 = x1*z1==0; // straight
+    xx = min(0, s0?0:x0, s1?0:x1);
+    c0 = [for(i=s0?[[0,0]]:fillet_path(x0, z0, convex, !core && x0>0)) force3d(offset2d(profile, i[0]), i[1])];
+    c1 = [for(i=s1?[[0,0]]:fillet_path(x1, -z1, convex, !core && x1>0)) force3d(offset2d(profile, i[0]), i[1]+h)];
+    cc = core ? [] : offset2d(profile, xx);
+    m = concat([if (!core && (x1>=xx)) force3d(cc, 0)], c0, reverse(c1), [if (!core && (x0>=xx)) force3d(cc, h)]);
     layered_block(m, !core);
+  }
+}
+
+// sweep profile along path with end caps defined by c0,c1=[r,e] where r=fillet radius, e=cap length (optional)
+module fillet_sweep(profile, path, c0, c1, s=0) {
+  k = len(path);
+  if (k>1) {
+    rr = max([for (p=profile) norm(p)]);
+    r0 = min(rr, opt(c0, 0, rr)); // start cap radius
+    r1 = min(rr, opt(c1, 0, rr)); // end cap radius
+    e0 = abs(opt(c0, 1, r0)); // start cap length
+    e1 = abs(opt(c1, 1, r1)); // end cap length
+    s0 = [let(fa=_fa(r0, e0)) if (e0>0) for (t=[0:fa:90-fa]) cos(t)*e0];
+    s1 = [let(fa=_fa(r1, e1)) if (e1>0) for (t=[fa:fa:90]) sin(t)*e1];
+    v0 = [let(b=path[0], t=unit(path[0]-path[1])) for (s=s0) b+t*s];
+    v1 = [let(b=path[k-1], t=unit(path[k-1]-path[k-2])) for (s=s1) b+t*s];
+    p = concat(v0, path, v1);
+    g = [let(k=len(p), a0=len(v0), a1=len(v1)) for (i=[0:k-1]) let(t=i/k) i<a0 ? [1-(1-sin(90*i/a0))*r0/rr,t] : i>=k-a1 ? [1-(1-sin(90*(k-i-1)/a1))*r1/rr,t] : [1,t]];
+    layered_block(sweep_layers([for (i=g) profile*i[0]], force3d(p), s=s, twist=(s!=0||p[0][2]!=undef)));
   }
 }
 
@@ -2354,14 +2464,15 @@ module fillet_bin(profile, h=20, t=1.6, bottom=true, flat=true, tidy) {
 
 // create a tray of height h from a profile with rounded bottom r, negative thickness t means inner wall
 // different from fillet_bin(), it supports highly rounded bottom when t is negative
-module fillet_tray(profile, h=20, t=1.6, r) {
+module fillet_tray(profile, h=20, t=1.6, r, flat=true) {
   tt = abs(t);
   rr = max(0.01, max(tt, min(h*2/3, ifundef(r, tt))));
   g = r==0 ? [[0,max(0,t)],[h,max(0,t)]] : append(shift2d(arc_path(rr, [180,90])*2, [rr,t<0?-rr:0]), [h,t<0?0:rr]);
   layered_block(concat(
-        [for (e=g) force3d(offset2d(profile, e[1]), e[0])], // exterior
-        [for (e=reverse(g)) force3d(offset2d(profile, t<0?e[1]-tt:0), min(h, tt+e[0]*(h-tt)/h))] // interior
-        ));
+    [for (e=g) force3d(offset2d(profile, e[1]), e[0])], // exterior
+    [if (!flat) for (a=quanta(_fn2(t/2), max=180)) if (a>0) force3d(offset2d(profile, (cos(a)-1)*tt/2), h+sin(a)*tt/2)],
+    [for (e=reverse(g)) force3d(offset2d(profile, t<0?e[1]-tt:0), min(h, tt+e[0]*(h-tt)/h))] // interior
+    ));
 }
 
 // create a dome of height h from a profile where t=thickness (may be negative, zero means solid), r=fillet radius
@@ -2394,20 +2505,25 @@ module fillet_dome(profile, h=20, t=1.6, r=5, vault=0, v=1, s=0, tidy) {
 
 // a box of inner dimensions dm, with rounded bottom and corners, negative t means dm is outer dimensions
 module fillet_box(dm, t=1.6, r=5, bottom=true) {
-  p = pad_path(dm[0], dm[1], r=min(min(rank(dm, 2))/2-0.01, r));
+  p = pad_path(dm[0], dm[1], r=min(min(redim(dm, 2))/2-0.01, r));
   fillet_bin(p, h=dm[2], t=t, bottom=bottom);
   ascend(t-0.01) children();
 }
 
 // a rectangular case with lid ready for 3D printing, see fillet_bin() and fillet_lid() for parameters,
-// except here dm=[inner width, inner depth, inner height of bin, inner height of lid], debug=assembled view,
-// children are added relative to the bottom inside the bin
+// except here dm=[inner width, inner depth, inner height of bin, inner height of lid], debug=assembled view
+// child 0 is added and child 1 is subtracted relative to inner bottom of bin (meant for lid=false or bin=false)
 module fillet_case(dm, t=1.6, r=5, e=3, g=0.1, lid=true, bin=true, top=true, bottom=true, debug=false) {
   d = ifundef(dm[3], 0);
   p = pad_path(dm[0], dm[1], r=max(1.6, min(min(dm[0], dm[1])/2, r)));
   scatter(dm[0]+10, enable=!debug && lid && bin) {
-    if (bin) fillet_bin(p, h=dm[2], t=t, bottom=bottom) children();
-    if (lid) flipx(h=dm[2]+d+t*2+0.1, enable=debug) fillet_lid(p, h=d, t=t, e=e, g=g, top=top);
+    if (bin) difference() {
+      fillet_bin(p, h=dm[2], t=t, bottom=bottom) if ($children>0) children(0);
+    }
+    if (lid) difference() {
+      flipx(h=dm[2]+d+t*2+0.1, enable=debug) fillet_lid(p, h=d, t=t, e=e, g=g, top=top);
+      if ($children>1) flipx(h=dm[2]+d+t*2+0.1, enable=!debug) ascend(t) children(1);
+    }
   }
 }
 
@@ -2454,8 +2570,8 @@ module weld(r=3, n) {
 // guide is a 2D profile of control points, with each coordinate in [0,1] range
 module morph_extrude(p1, p2, h, guide, s=0, curved=false) {
   n = max(len(p1), len(p2));
-  q1 = cyclic(oversample(p1, n), s);
-  q2 = oversample(p2, n);
+  q1 = cyclic(resample(p1, n), s);
+  q2 = resample(p2, n);
   if (is_list(guide))
     layered_block([for (g=guide) force3d(morph(q1, q2, g[1])*g[0], g[1]*h)]);
   else
@@ -2467,8 +2583,8 @@ module morph_extrude(p1, p2, h, guide, s=0, curved=false) {
 module morph_dome(p1, p2, h, guide, s=0, inner=2) {
   p2 = ifundef(p2, p1);
   n = max(len(p1), len(p2));
-  q1 = cyclic(oversample(p1, n), s);
-  q2 = oversample(p2, n);
+  q1 = cyclic(resample(p1, n), s);
+  q2 = resample(p2, n);
   hi = h - inner/2;
   guide = ifundef(guide, round_path(h, a=[0,90])/h);
   layered_block(concat(
@@ -2481,8 +2597,8 @@ module morph_dome(p1, p2, h, guide, s=0, inner=2) {
 // guide is a 2D curve of control points, with each coordinate within the [0,1] range
 module morph_tray(p1, p2, h, guide, s=0, inner=0.9) {
   n = max(len(p1), len(p2));
-  q1 = cyclic(oversample(p1, n), s);
-  q2 = oversample(p2, n);
+  q1 = cyclic(resample(p1, n), s);
+  q2 = resample(p2, n);
   hi = h - inner;
   guide = ifundef(guide, [for (t=quanta(_fn(h), end=1)) [1,t]]);
   layered_block(concat(
@@ -2495,8 +2611,8 @@ module morph_tray(p1, p2, h, guide, s=0, inner=0.9) {
 // guide is a 2D curve of control points, with each coordinate within the [0,1] range
 module morph_vase(p1, p2, h, guide, s=0, inner=2) {
   n = max(len(p1), len(p2));
-  q1 = cyclic(oversample(p1, n), s);
-  q2 = oversample(p2, n)*0.7;
+  q1 = cyclic(resample(p1, n), s);
+  q2 = resample(p2, n)*0.7;
   hi = h - inner/2;
   guide = ifundef(guide, subarray(round_path(h, a=[90,0]), 1)/h);
   layered_block(concat(
@@ -2509,8 +2625,8 @@ module morph_vase(p1, p2, h, guide, s=0, inner=2) {
 // guide is defaulted to a dome shape if not supplied
 module morph_case(p1, p2, h, guide, cut=0.5, s=0, j=5, inner=0.95, visible=true) {
   n = max(len(p1), len(p2));
-  q1 = cyclic(oversample(p1, n), s);
-  q2 = oversample(p2, n);
+  q1 = cyclic(resample(p1, n), s);
+  q2 = resample(p2, n);
   guide = ifundef(guide, shift2d(concat([for (t=quanta(20)) [1,-0.5*(1-t)]], scale2d(round_path(h, a=[0,90])/h, 1, 0.5)), [0,0.5]));
   gap = 0.4/h;
   w = box2dw(p1)+5;
