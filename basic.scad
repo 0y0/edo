@@ -515,13 +515,10 @@ function random_profile(d=50, min=4, max=7, f=1, s=5, seed) = let(r=rnd_seed(see
 // generate a path by rotating a shorter one n times around the origin
 function radiate2d(path, n, i=1) = i<n ? concat([let(r=m2_rotate(360/n*i)) for (p=path) p*r], radiate2d(path, n, i+1)) : path;
 
-// a line segment
-function line(x, y) = [[0,0],[x,y]];
-
 // combine a list of 2D paths end-to-end, optional from=starting point
 function concat2d(paths=[], from, i=0) = let(p=paths[i], from=ifundef(from, p[0])) p[0] ? concat(shift2d(subarray(p, i==0 ? 0 : 1), from-p[0]), concat2d(paths, from-p[0]+last(p), i+1)) : i<len(paths) ? concat2d(paths, from, i+1) : [];
 
-// similar to concat2d except that each segment is a single vector instead of a path
+// similar to concat2d except that each step is a single vector instead of a path
 function step2d(vectors, from=[0,0], i=0, m) = let(m=ifundef(m, len(vectors)), p=i==0?from:vectors[i-1]+from) concat([p], i==m ? [] : step2d(vectors, p, i+1, m));
 
 // join paths end-to-end to form a loop (will drop the last point if same as the first)
@@ -797,6 +794,9 @@ function helix_path(p1, p2, d=3, pitch=1) = pitch==0 ? [] : let(v=p2-p1, r=d/2, 
 // ====================================================================
 // 3D functions
 // ====================================================================
+
+// a line segment
+function line(x, y, z) = [[0,0,if(z)0],[x,y,if(z)z]];
 
 // an arbitrary orthogonal vector of v
 function orth(v) = let(x=v[0], y=v[1], z=v[2]) x!=0 && y!=0 ? [y,-x,0] : x!=0 && z!=0 ? [z,0,-x] : y!=0 && z!=0 ? [0,z,-y] : [z, x, y];
@@ -1244,7 +1244,7 @@ module pyramind(profile, h=5, inset=3, scale=0, origin) {
     layered_block(reverse([force3d(profile), force3d(offset2d(p, -inset), h)], enable=h<0));
 }
 
-// trace a thread along profile (negatively if children exists), r=tapering (as a ratio of whole path)
+// trace a thread along profile (negatively if children exists), r=tapering ratio (snap to points)
 module trace(profile, d=0.2, r=0, loop=false, fuse=true) {
   p = force3d(fuse ? fuse(profile, loop=loop) : profile);
   s = r>0 ? [for (t=quanta(len(profile)-1, end=1)) [scale_guide(t, r),t]] : undef;
@@ -1304,14 +1304,15 @@ module strip(path, h=10, t=1, r=2, s=5, f=1) {
 }
 
 // a beam between 2 points (cross section is rectangular or circular)
-// dm=cross section dimensions (2D for retangle, 1D for circle), m=hole diameter (1D dm only)
-module beam(p1, p2, dm=0.5, m) {
+// dm=cross section dimensions (2D for retangle, 1D for circle), c=cap length, m=hole diameter (1D dm only)
+module beam(p1, p2, dm=0.5, c=0, m) {
   a = as3d(p1);
   b = as3d(p2);
   d = b-a;
   translate(a) orient(d) {
     if (is_list(dm)) translate([0,0,norm(d)/2]) cube([dm[0],dm[1],norm(d)], center=true);
     else if (m!=undef && m>0) pipe(d=dm, h=norm(d), m=m);
+    else if (c>0) fillet_sweep(ring_path(dm), [[0,0,0],d], c0=c, c1=c);
     else cylinder(d=dm, h=norm(d), $fn=_fn(dm/2));
   }
 }
