@@ -307,7 +307,7 @@ function path_concat(paths=[], i=0) = i>=len(paths) ? [] : let(p=paths[i]) conca
 function shorten(path, d=0, i=0) = d>0 && i<len(path) ? shorten(path, d-norm(path[i]-path[i+1]), i+1) : snip(path, i);
 
 // resample path to increase or decrease number of points to n
-function resample(path, n, loop=true) = let(n=ifundef(n, len(path))) n<=0 ? path : let(q=close_loop(path, enable=loop), k=len(q), mg=mileage(q), d=len(q[0]), mp=[for (j=[0:d-1]) [for (i=[0:k-1]) [mg[i], q[i][j]]]]) [for (t=quanta(n, max=mg[k-1])) [for (s=[0:d-1]) lookup(t, mp[s])]];
+function resample(path, n, loop=true) = let(n=ifundef(n, len(path))) n<=0 ? path : let(q=close_loop(path, enable=loop), k=len(q), mg=mileage(q), d=len(q[0]), mp=[for (j=[0:d-1]) [for (i=[0:k-1]) [mg[i], q[i][j]]]]) [for (t=quanta(n, max=mg[k-1], end=loop?0.9999:1)) [for (s=[0:d-1]) lookup(t, mp[s])]];
 
 // create a straight path between two points with equal-length segments shorter than or equal to ds {see ruler_path()}
 function bridge(p1, p2, ds) = let(v=p2-p1, m=ceil(norm(v)/ds)) [for (t=quanta(m)) p1+t*v];
@@ -1143,7 +1143,7 @@ function sweep_tangent(path, loop, k, i) =
   let(u=loop ? path[i]-path[mod(i-1,k)] : path[max(1,i)]-path[max(0,i-1)])
   let(v=loop ? path[mod(i+1,k)]-path[i] : path[min(k-1,i+1)]-path[min(k-2,i)]) unit(u)+unit(v);
 
-// subroutine to find the average twist along the path, k=length of path, s=additional twist (1=>360º)
+// subroutine to find the average twist along the path, k=length of path, s=additional twist (s*360º)
 function sweep_twist(path, loop, k, s=0, i=0, m, t=[0,0,1]) = loop==false ? s*360/k :
   i==k ? let(t0=unit(sweep_tangent(path, loop, k, 0)), v0=orth(t0)) (s*360-s_angle3d(v0, v0*m, t0)%180)/k :
   let(tt=sweep_tangent(path, loop, k, i))
@@ -1426,18 +1426,22 @@ module tip(d=5, s=0, a=[0,360], inflate=0) {
 // a vertical pipe at origin
 // d=diameter, h=height, t=thickness of wall, m=diameter of hole (overrides t, zero for cylinder)
 // floor=bottom of a closed pipe (default: none, negative: open pipe extended below ground)
-module pipe(d, h=2, t=2, floor=0, center=false, m) {
+module pipe(d, h=2, t=2, floor=0, center=false, flat=true, m) {
   r = d/2;
-  t = m!=undef ? (d-m)/2 : t>0 ? min(r,t) : max(0,r+t);
-  c = ring_path(d);
+  t = m!=undef ? max(0.01,d-m)/2 : t>0 ? min(r,t) : max(0.01,r+t);
   a = center ? -h/2 : 0;
-  m = (t>r-0.01) ? [force3d(c, a+floor), force3d(c, h+a)] : concat(
-      [force3d(c, a+(floor<0 ? floor : 0))],
-      [force3d(c, h+a)],
-      [force3d(c*(r-t)/r, h+a)],
-      [force3d(c*(r-t)/r, a+floor)]
-      );
-  layered_block(m, loop=(t!=r && floor<=0));
+  if (abs(r-t)<0.01 && flat) {
+    translate([0,0,a+min(0,floor)]) cylinder(d=d, h=h-min(0,floor));
+  }
+  else {
+    g = flat ? h : h-t/2;
+    c = (flat||t<$fs) ? [[0,0],[-t,0]] : arc_path(t);
+    p = concat2d([[[0,min(0,floor)],[0,g]], c, [[-t,g],[-t,floor]]]);
+    *plot(p);
+    m = sweep_wall(p, force3d(ring_path(d), a), loop=true);
+    layered_block(m, loop=true);
+    if (floor>0) layered_block([slice(m, len(m[0])-1), slice(m, 0)]);
+  }
 }
 
 // basic torus
@@ -1724,8 +1728,9 @@ module breadboard(w=80, d=50, h=1.5, r=0.5) {
   punch([[w/2-3,0],[-w/2+3,0]], [0,2]) plate(quad_path(w, d), h, r=r);
 }
 
-// screw thread added to children
-module screw_thread(m=3, pitch=0.5, h=[0,10], b=[0,0], gap=0, open=0, ease=true) {
+// vertical screw added to children
+// m=screw_diameter, h=[start_height, end_height], b=[bottom_space, top_space], open=hole_size, taper=thread_tapering
+module screw_thread(m=3, pitch=0.5, h=[0,10], b=[0,0], gap=0, open=0, taper=true, flat=true) {
   p = pitch;
   h0 = is_list(h) ? h[0] : 0;
   h1 = is_list(h) ? h[1] : h;
@@ -1738,12 +1743,12 @@ module screw_thread(m=3, pitch=0.5, h=[0,10], b=[0,0], gap=0, open=0, ease=true)
   r = v/(p/2);
   margin = 0.02;
   xsec = [[-margin,0,0.75*v/r], [v*5/8,0,p/16], [v*5/8,0,-p/16], [-margin,0,-0.75*v/r]];
-  mesh = [for (t=quanta(ppr*bb/p, end=1.01)) let(a=t*bb*360/p+(h0+b0)*360/p) shift3d(spin3d(xsec*(ease ? scale_guide(t) : 1), a), [(m/2-v*5/8-gap)*cos(a),(m/2-v*5/8-gap)*sin(a),t*bb])];
+  mesh = [for (t=quanta(ppr*bb/p, end=1.01)) let(a=t*bb*360/p+(h0+b0)*360/p) shift3d(spin3d(xsec*(taper ? scale_guide(t) : 1), a), [(m/2-v*5/8-gap)*cos(a),(m/2-v*5/8-gap)*sin(a),t*bb])];
   ascend(h0) intersection() {
     union() {
       if (hh>0 && bb>0) ascend(b0) layered_block(mesh);
       if (open == 0) cylinder(d=m-v*5/4-gap*2, h=hh, $fn=ppr);
-      else pipe(d=m-v*5/4-gap*2, h=hh, t=-open/2);
+      else pipe(d=m-v*5/4-gap*2, h=hh, t=-open/2, flat=flat);
     }
     cylinder(d=m-gap*2+margin*2, h=hh, $fn=ppr);
   }
@@ -1751,7 +1756,8 @@ module screw_thread(m=3, pitch=0.5, h=[0,10], b=[0,0], gap=0, open=0, ease=true)
 }
 
 
-// nut thread inside a ring (m=[inner_diameter, outer_diameter]) or carved from children
+// vertical nut thread inside a ring or, if given, carved from children
+// m=[screw_diameter, ring_diameter], h=[start_height, end_height], b=[bottom_space, top_space]
 module nut_thread(m=[3,5], pitch=0.5, h=[0,10], b=[0,0], gap=0.4, debug=false) {
   d0 = is_list(m) ? m[0] : m;
   d1 = is_list(m) ? m[1] : m+pitch*sqrt(3)/2+gap;
@@ -1760,12 +1766,12 @@ module nut_thread(m=[3,5], pitch=0.5, h=[0,10], b=[0,0], gap=0.4, debug=false) {
   hh = h1-h0;
   b0 = max(0, is_list(b) ? b[0] : b); // bottom non-threaded space
   b1 = max(0, is_list(b) ? b[1] : 0); // top non-threaded space
-  hx = hh-b0-b1>0 ? [h0-pitch-b0-0.01,h1+pitch+b1+0.01] : [h0-0.01,h1+0.01];
-  if ($children) difference() {
+  hx = ($children==0 && hh-b0-b1>0) ? [h0-pitch-b0-0.01,h1+pitch+b1+0.01] : [h0-0.01,h1+0.01];
+  if ($children) difference() { // carve from children
     children();
     highlight(debug) screw_thread(m=d0, pitch=pitch, h=hx, b=b, gap=-gap, open=0);
   }
-  else difference() {
+  else difference() { // carve from a cylinder
     ascend(h0+0.01) cylinder(d=d1, h=hh-0.02, $fn=_fn(d1/2));
     highlight(debug) screw_thread(m=d0, pitch=pitch, h=hx, b=b, gap=-gap, open=0);
   }
@@ -1813,13 +1819,13 @@ module mag_socket(h=1.4, d=4.3) {
 }
 
 // clip within a volume defined by dm above xy-plane, then sliced at cx, cy and cz 
-module clip(dm=[150,150,150], cx, cy, cz, origin, enable=true, debug=false) {
+module clip(dm=[150,150,150], cx, cy, cz, origin, enable=true, margin=0.5, debug=false) {
   intersection() {
     children();
     if (enable) highlight(debug) translate([0,0,dm[2]/2]+(origin==undef?[0,0,0]:origin)) intersection() {
-      c = [cx==undef?0:cx-dm[0]/2,cy==undef?0:dm[1]/2+cy,cz==undef?0:cz-dm[2]];
-      translate(c) cube(dm+[0.01,0.01,0.01], center=true);
-      cube(dm+[0.02,0.02,0.02], center=true);
+      c = [cx==undef?0:cx-dm[0]/2-margin,cy==undef?0:cy+dm[1]/2+margin,cz==undef?0:cz-dm[2]-margin];
+      translate(c) cube(dm+[margin,margin,margin]*2, center=true);
+      cube(dm+[margin,margin,margin]*2, center=true);
     }
   }
 }
