@@ -787,7 +787,7 @@ function peanut_path(p1, p2, w=10, f=1.2) = let(m=(p1+p2)/2, e=p2-p1, h=norm(e),
 
 function ruler_path(p1, p2, n) = let(d=p2-p1) [for (t=quanta(n?n:ceil(norm(d)/$fs), end=1)) p1+t*d]; // 2D also works
 function exp_path(p1, p2, n, r=2, v) = r==0 ? [p1,p2] : r==1 ? ruler_path(p1, p2, n) : let(v=ifundef(v, (p2-p1)*(1-r)/(1-pow(r,n)))) n==0 ? [p1] : let(p=p2-pow(r,n-1)*v) concat(exp_path(p1, p, n-1, r, v), [p2]); // divide into n segments of exponential ratios
-function bush_path(p1, p2, f=3, end=1) = let(dx=p2[0]-p1[0], dy=p2[1]-p1[1], dz=p2[2]-p1[2]) [for (t=quanta(norm(p1-p2)*2, end=end)) let(s=poly_ease(t,f)) p1+[dx*s,dy*s,dz*t]];
+function bush_path(p1, p2, f=3, end=1) = let(dx=p2[0]-p1[0], dy=p2[1]-p1[1], dz=p2[2]-p1[2]) [for (t=quanta(norm(p1-p2)/$fs, end=end)) let(s=poly_ease(t,f)) p1+[dx*s,dy*s,dz*t]];
 function vault_path(p1, p2, n, loop=false) = let(q1=p1[2]<p2[2]?p1:p2, q2=p1[2]<p2[2]?p2:p1, m=q1+[0,0,q2[2]-q1[2]]) concat([for (t=quanta(ceil(ifundef(n, norm(p2-p1)/$fs/2)), end=1)) bezier([p1,m,m,p2], t)], loop?[m]:[]);
 function helix_path(p1, p2, d=3, pitch=1) = pitch==0 ? [] : let(v=p2-p1, r=d/2, n=norm(v), m=m3_rotate(v)) [for (t=quanta(ceil(PI*r*n/pitch/$fs), end=1)) let(a=360*t*n/pitch) p1+[cos(a)*r,sin(a)*r,n*t]*m];
 
@@ -1425,7 +1425,7 @@ module tip(d=5, s=0, a=[0,360], inflate=0) {
 }
 
 // a vertical pipe at origin
-// d=diameter, h=height, t=thickness of wall, m=diameter of hole (overrides t, zero for cylinder)
+// d=outer diameter, h=height, t=thickness of wall, m=diameter of hole (overrides t, zero for cylinder)
 // floor=bottom of a closed pipe (default: none, negative: open pipe extended below ground)
 module pipe(d, h=2, t=2, floor=0, center=false, flat=true, m) {
   r = d/2;
@@ -1596,7 +1596,7 @@ module lsbad(array, layer=0) {
 
 // echo each element on a separate line
 module echoln(array) {
-  for (e=array) echo(e);
+  for (i=[0:len(array)-1]) echo(i, array[i]);
 }
 
 // echo string in color
@@ -1778,25 +1778,26 @@ module nut_thread(m=[3,5], pitch=0.5, h=[0,10], b=[0,0], gap=0.4, debug=false) {
   }
 }
 
-// thread on a bottle: m=inner diameter, w=thread x,y dimensions, a=starting angle, cap=cap mode
-module bottle_thread(m, pitch=4, h=[0,10], w=[1.5,0.7], a=0, cap=false) {
+// thread on a bottle: m=inner diameter, w=thread dimensions, a=spin, n=lug count, cap=cap mode, gap=spacing
+module bottle_thread(m, pitch=4, h=[0,10], w=[1.2,0.8], a=0, n=1, cap=false, gap=0.5) {
   w0 = opt(w, 0) + (cap ? 0.1 : 0);
-  r = m/2 + (cap ? w0+0.5 : -0.1);
+  w1 = opt(w, 1);
+  r = m/2 + (cap ? w0+gap : -0.1);
   h0 = is_list(h) ? h[0] : 0;
   h1 = is_list(h) ? h[1] : h;
   hh = h1-h0;
-  n = hh/pitch;
-  g = [for (t=quanta(ceil(_fn(r)*abs(n)), end=1)) [r*cos(t*n*360),r*sin(t*n*360),hh*t]];
-  s = [for (t=quanta(len(g)-1, end=1)) [scale_guide(t, 2*w0/m),t]];
-  c = round_path(w0, opt(w, 1), cap ? [90,270] : [-90,90]);
-  layers = morph_between(p1=c, p2=c, h=1, scaler=s, n=len(c), curved=false);
-  ascend(h0) spin(a) layered_block(sweep_layers(layers, g, loop=false, twist=false));
+  k = hh/pitch; // how many rounds
+  g = [let(d=k*m*PI) for (t=quanta(d/$fs)) let(a=t*k*360) [r*cos(a),r*sin(a),hh*t-(cap||n==1?0:w1*3*max(0,1-d*t/6)^7)]];
+  radiate(n) ascend(h0) {
+    spin(a) fillet_sweep(round_path(w0, w1, cap ? [90,270] : [-90,90]), g, c1=2, twist=(!cap && n>1));
+    if (!cap && n>1) translate(g[len(g)-1]-[0,0,w1*1.9]) sphere(w1*0.9); // bump
+  }
   children();
 }
 
 // thread on a cap (unlike nut_thread, not a negative space)
-module cap_thread(m, pitch=4, h=[0,10], w=[1.2,0.7], a=0) {
-  bottle_thread(m=m, pitch=pitch, h=h, w=w, a=a, cap=true) children();
+module cap_thread(m, pitch=4, h=[0,10], w=[1.2,0.8], a=0, n=1, gap=0.5) {
+  bottle_thread(m=m, pitch=pitch, h=h, w=w, a=a, n=n, cap=true, gap=gap) children();
 }
 
 // cut nut holes at a list of locations
@@ -2422,7 +2423,7 @@ module fillet_extrude(profile, h=1.6, xz0=[-1,1], xz1=[-1,-1], r0, r1, r, convex
 }
 
 // sweep profile along path with end caps defined by c0,c1=[r,e] where r=fillet radius, e=cap length (optional)
-module fillet_sweep(profile, path, c0, c1, s=0) {
+module fillet_sweep(profile, path, c0, c1, s=0, twist=true) {
   k = len(path);
   if (k>1) {
     rr = max([for (p=profile) norm(p)]);
@@ -2436,7 +2437,7 @@ module fillet_sweep(profile, path, c0, c1, s=0) {
     v1 = [let(b=path[k-1], t=unit(path[k-1]-path[k-2])) for (s=s1) b+t*s];
     p = concat(v0, path, v1);
     g = [let(k=len(p), a0=len(v0), a1=len(v1)) for (i=[0:k-1]) let(t=i/k) i<a0 ? [1-(1-sin(90*i/a0))*r0/rr,t] : i>=k-a1 ? [1-(1-sin(90*(k-i-1)/a1))*r1/rr,t] : [1,t]];
-    layered_block(sweep_layers([for (i=g) profile*i[0]], force3d(p), s=s, twist=(s!=0||p[0][2]!=undef)));
+    layered_block(sweep_layers([for (i=g) profile*i[0]], force3d(p), s=s, twist=twist&&(s!=0||p[0][2]!=undef)));
   }
 }
 
