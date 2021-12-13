@@ -695,7 +695,8 @@ function apple_path(d=10) = let(n=ceil(_fn(d/2)*1.5)) [for (i=[0:n-1]) apple_loc
 function puffy_path(d=10) = radiate2d(shift2d(round_path(d, a=[-24,24], $fa=$fa/2), [-d/2,0]), 4);
 function bang_path(d=10) = radiate2d(shift2d(round_path(0.1875*d, a=[224,136]), [0.625*d,0]), 12);
 function floral_path(d=10, n=5) = let(c=n+1) [for (t=quanta(_fn2(d)*sqrt(n))) [c*cos(360*t)-cos(c*360*t),c*sin(360*t)-sin(c*360*t)]*d/(2*c)];
-function petal_path(d, n=5, c=0) = [for (t=quanta(_fn(d*n)*2, max=360)) [cos(t),sin(t)]*max(c,(d/3+d/5*cos(180+n*t)))];
+function petal_path(d=10, n=5, c=0) = [for (t=quanta(_fn(d*n)*2, max=360)) [cos(t),sin(t)]*max(c,(d/3+d/5*cos(180+n*t)))];
+function hump_path(d=10, n=12, f=0.2) = radiate2d([for (t=quanta(ceil(_fn3(PI*d/n/2)), max=360/n)) [cos(t),sin(t)]*d*(1+f*abs(sin(t*n/2)))/2], n);
 function heart_path(d=10) = [for (t=quanta(_fn(d/2))) let(s=abs(2*t-1), r=0.7*d*(s*s*s-7*s*s+10*s)/(5-pow(s,12))) [r*cos(360*t)-d/5,r*sin(360*t)]];
 function poly_path(d=10, n=5) = [for (t=quanta(n)) let(a=180/n+360*t) [cos(a),sin(a)]*d/2];
 function star_path(d=10, n=5, f=4) = [for (i=[0:n*2-1]) let(a=180/n+180*i/n) [cos(a),sin(a)]*d/(i%2?f:2)];
@@ -704,7 +705,7 @@ function butterfly_path(d=10) = let(n=_fn(d/2)*2) [for (i=[0:n-1]) butterfly_loc
 function egg_path(d=10) = let(n=_fn(d/2)) [for (i=[0:n-1]) egg_locus(i/n)*d];
 function box_path(w=10, d) = let(d=ifundef(d,w)) [for (t=quanta(_fn(min(w,d)/16)*8)) box_trace(t, [w,d], true)];
 function arch_path(d=10) = [for (t=quanta(_fn(d))) arch_trace(t)-[0.5,0.5]]*d;
-function tear_path(d, f=1) = [for (a=quanta(_fn(d/3), max=360)) [(cos(a)-1)*f*d+d, (cos(a)+1)*sin(a)*d/3]/2];
+function tear_path(d=10, f=1) = [for (a=quanta(_fn(d/3), max=360)) [(cos(a)-1)*f*d+d, (cos(a)+1)*sin(a)*d/3]/2];
 function teeth_path(d=10, n=20, f=1, s=1) = let(a=90/n) radiate2d(concat(ring_path(d, [-a+s,a-s]), ring_path(d-f, [a+s,a*3-s])), n); // f=depth of teeth, s=teeth sharpness
 function puzzle_path(d=10, y=0) = [for (t=quanta(_fn(d/2), end=1)) [d/2,d+y]-puzzle_trace(t)*d];
 function comma_path(d=10, f=0.5) = let(n=_fn2(d/2)) [for (t=quanta(n, end=1, max=1)) [cos(t*360),sin(t*360)]*(1-t+f*t)*d/2];
@@ -1756,7 +1757,6 @@ module screw_thread(m=3, pitch=0.5, h=[0,10], b=[0,0], gap=0, open=0, taper=true
   children();
 }
 
-
 // vertical nut thread inside a ring or, if given, carved from children
 // m=[screw_diameter, ring_diameter], h=[start_height, end_height], b=[bottom_space, top_space]
 module nut_thread(m=[3,5], pitch=0.5, h=[0,10], b=[0,0], gap=0.4, debug=false) {
@@ -1778,7 +1778,8 @@ module nut_thread(m=[3,5], pitch=0.5, h=[0,10], b=[0,0], gap=0.4, debug=false) {
   }
 }
 
-// thread on a bottle: m=inner diameter, w=thread dimensions, a=spin, n=lug count, cap=cap mode, gap=spacing
+// thread on a bottle: m=neck diameter, w=thread dimensions, a=spin, n=count, cap=cap mode, gap=spacing
+// when n>1 and !cap, each thread bends down to provide a stop for the lug neck finish
 module bottle_thread(m, pitch=4, h=[0,10], w=[1.2,0.8], a=0, n=1, cap=false, gap=0.5) {
   w0 = opt(w, 0) + (cap ? 0.1 : 0);
   w1 = opt(w, 1);
@@ -1795,7 +1796,7 @@ module bottle_thread(m, pitch=4, h=[0,10], w=[1.2,0.8], a=0, n=1, cap=false, gap
   children();
 }
 
-// thread on a cap (unlike nut_thread, not a negative space)
+// thread on a cap (unlike nut_thread, not a negative space), to pair with bottle_thread()
 module cap_thread(m, pitch=4, h=[0,10], w=[1.2,0.8], a=0, n=1, gap=0.5) {
   bottle_thread(m=m, pitch=pitch, h=h, w=w, a=a, n=n, cap=true, gap=gap) children();
 }
@@ -2471,16 +2472,18 @@ module fillet_bin(profile, h=20, t=1.6, bottom=true, flat=true, tidy) {
 }
 
 // create a tray of height h from a profile with rounded bottom r, negative thickness t means inner wall
-// different from fillet_bin(), it supports highly rounded bottom when t is negative
+// unlike fillet_bin() it supports deep rounding (limited only by h)
 module fillet_tray(profile, h=20, t=1.6, r, flat=true) {
-  tt = abs(t);
-  rr = max(0.01, max(tt, min(h*2/3, ifundef(r, tt))));
-  g = r==0 ? [[0,max(0,t)],[h,max(0,t)]] : append(shift2d(arc_path(rr, [180,90])*2, [rr,t<0?-rr:0]), [h,t<0?0:rr]);
-  layered_block(concat(
-    [for (e=g) force3d(offset2d(profile, e[1]), e[0])], // exterior
-    [if (!flat) for (a=quanta(_fn2(t/2), max=180)) if (a>0) force3d(offset2d(profile, (cos(a)-1)*tt/2), h+sin(a)*tt/2)],
-    [for (e=reverse(g)) force3d(offset2d(profile, t<0?e[1]-tt:0), min(h, tt+e[0]*(h-tt)/h))] // interior
-    ));
+  if (t!=0 && h!=0) {
+    tt = abs(t);
+    rr = max(tt, min(abs(ifundef(r, t)), abs(h)-(flat?0:tt/2)));
+    hh = flat ? abs(h) : abs(h)-tt/2;
+    g = concat2d([r==0 ? line_path([tt,0]) : arc_path(rr*2, [-90,0]),
+      if (rr<hh-0.01) line_path([0,hh-(r==0?0:rr)]),
+      flat ? line_path([-tt,0]) : arc_path(tt, [0,180]),
+      if (rr<hh-0.01) line_path([0,-hh+rr]), arc_path((rr-tt)*2, [0,-90])], [t<0?-rr:tt-rr,0]);
+    layered_block([for (i=g) force3d(offset2d(profile, i[0]), i[1])]);
+  }
 }
 
 // create a dome of height h from a profile where t=thickness (may be negative, zero means solid), r=fillet radius
