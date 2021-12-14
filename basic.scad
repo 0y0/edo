@@ -20,6 +20,9 @@ $debug = false;
 // truncate number (or array of numbers) to d decimal places
 function trunc(n, d=2) = let(s=pow(10,d)) is_list(n) ? [for(i=n) floor(i*s)/s] : floor(n*s)/s;
 
+// round number n to d decimal places
+function round2(n, d=0) = round(n*10^d)/10^d; 
+
 // round n to the nearest multiple of d
 function mof(n, d=2) = round(n/d)*d;
 
@@ -125,7 +128,7 @@ function range(span) = [span[0]:(span[1]-span[0])/span[2]:span[1]+0.0001];
 
 // return a for-loop range in [0,max) equally divided into number of parts
 // set end=1 to produce a closed range [0,max], use max to scale the results
-function quanta(parts=100, start=0, end=0.9999, max=1) = parts<1 ? [] : let(s=(end-start)/parts) [start*max:s*max:end*max-(end%1==0?0:sign(s)*0.0002)];
+function quanta(parts=100, start=0, end=0.9999, max=1) = parts<1 ? [] : let(s=round2(start,3), e=round2(end,3), d=(e-s)/parts) [((s-start)%1==0?s:s+d)*max:d*max:((e-end)%1==0?e+d/2:end)*max];
 
 // cycle through a list of colors, randomly if seed is given
 function palette(i, seed) = let(c=["red","green","blue","brown","white","purple","yellow","pink","cyan","black","orange"], k=len(c), m=mod(i,k)) seed ? c[floor(rnd(0,k,m+1,seed)[m])] : c[m];
@@ -1283,11 +1286,12 @@ module shell(profile, h=2, t=1, bottom=0, inflate=0, r=2) {
 }
 
 // a twisted shell enclosing the profile
-// h=height, t=thickness (negative => inner shell), pitch=height per turn (zero => disable twist)
-function rotini(profile, h=20, t=0, pitch=100) = let(s=t<0?0:1, a=pitch==0?0:360/pitch) concat(
-  [for (z=quanta(ceil(h/$fs), start=s, end=1-s, max=h)) force3d(spin2d(profile, z*a), z)],
-  [if (t!=0) let(p=offset2d(profile, t)) for (z=quanta(ceil(h/$fs), start=1-s, end=s, max=h)) force3d(spin2d(p, z*a), z)]);
-module rotini(profile, h=20, t=0, pitch=100) { layered_block(rotini(profile, h, t, pitch), loop=t!=0); }
+// h=height, t=thickness (negative => inner shell), m=hole size, pitch=height per turn (zero => disable twist)
+function rotini(profile, h=20, t=0, m=0, pitch=100) = let(s=t>0?1:0, a=pitch==0?0:360/pitch) concat(
+  [if (t!=0) let(p=offset2d(profile, t)) for (z=quanta(ceil(h/$fs), start=1-s, end=s, max=h)) force3d(spin2d(p, z*a), z)],
+  [if (t==0 && m>0) let(p=[for (i=profile) unit(i)*m/2]) for (z=quanta(ceil(h/$fs), start=1-s, end=s, max=h)) force3d(spin2d(p, z*a), z)],
+  [for (z=quanta(ceil(h/$fs), start=s, end=1-s, max=h)) force3d(spin2d(profile, z*a), z)]);
+module rotini(profile, h=20, t=0, m=0, pitch=100) { layered_block(rotini(profile=profile, h=h, t=t, m=m, pitch=pitch), loop=(t!=0||m>0)); }
 
 // a basin (combination of a plate and a shell)
 // h=height, t=thickness of wall (negative => inner wall), bottom=ascend, inflate=added thickness, r=rounding
