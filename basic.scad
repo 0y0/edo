@@ -125,7 +125,7 @@ function range(span) = [span[0]:(span[1]-span[0])/span[2]:span[1]+0.0001];
 
 // return a for-loop range in [0,max) equally divided into number of parts
 // set end=1 to produce a closed range [0,max], use max to scale the results
-function quanta(parts=100, start=0, end=0.9999, max=1) = parts<1 ? [] : let(s=(end-start)/parts) [start*max:s*max:end*max-(end%1==0?0:sign(s)*0.0002)];
+function quanta(parts=100, start=0, end=0.9999, max=1) = parts<1 ? [] : let(s=(end-start)/parts) [start*max:s*max:(end+0.0002-(end>=1?0:s))*max];
 
 // cycle through a list of colors, randomly if seed is given
 function palette(i, seed) = let(c=["red","green","blue","brown","white","purple","yellow","pink","cyan","black","orange"], k=len(c), m=mod(i,k)) seed ? c[floor(rnd(0,k,m+1,seed)[m])] : c[m];
@@ -1076,7 +1076,7 @@ function shift_layers(layers, delta=[0,0,0], base=false) = let(m=[for (l=layers)
 function scale_layers(layers, guide) = let(k=len(layers)-1) [for (i=[0:k]) [let(s=lookup(i/k, guide)) for (p=layers[i]) [p[0]*s, p[1]*s, p[2]]]];
 
 // spin layers about z-axis based on a unit guiding path representing [layer, angle]
-function spin_layers(layers, guide, a=60) = let(k=len(layers)-1, g=ifundef(guide, [[0,0],[1,a]])) [for (i=[0:k]) spin3d(layers[i], lookup(i/k, g))];
+function spin_layers(layers, guide) = let(k=len(layers)-1) [for (i=[0:k]) spin3d(layers[i], lookup(i/k, guide)*360)];
 
 // convert layers to slope lines and vice versa
 function isomesh(layers) = let(n=len(layers[0])-1) [for (i=[0:n]) [for (j=layers) j[i]]];
@@ -2484,7 +2484,7 @@ module fillet_bin(profile, h=20, t=1.6, bottom=true, flat=true, tidy) {
 
 // create a tray of height h from a profile with rounded bottom r, negative thickness t means inner wall
 // unlike fillet_bin() it supports deep rounding (limited only by h)
-module fillet_tray(profile, h=20, t=1.6, r, bottom=true, flat=true) {
+module fillet_tray(profile, h=20, t=1.6, r, flat=true) {
   if (t!=0 && h!=0) {
     tt = abs(t);
     rr = max(tt, min(abs(ifundef(r, t)), abs(h)-(flat?0:tt/2)));
@@ -2493,7 +2493,7 @@ module fillet_tray(profile, h=20, t=1.6, r, bottom=true, flat=true) {
       if (rr<hh-0.01) line_path([0,hh-(r==0?0:rr)]),
       flat ? line_path([-tt,0]) : arc_path(tt, [0,180]),
       if (rr<hh-0.01) line_path([0,-hh+rr]), arc_path((rr-tt)*2, [0,-90])], [t<0?-rr:tt-rr,0]);
-    layered_block([for (i=g) force3d(offset2d(profile, i[0]), i[1])], loop=!bottom);
+    layered_block([for (i=g) force3d(offset2d(profile, i[0]), i[1])]);
   }
 }
 
