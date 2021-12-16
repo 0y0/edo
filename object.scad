@@ -1,4 +1,4 @@
-// collection of commonly used objects (requires basic.scad)
+// collection of commonly used objects (requires edo.scad)
 
 module cell_generic(d, h, cd, ch, center, invert) {
   dz = center ? 0 : h/2;

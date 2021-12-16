@@ -1606,7 +1606,8 @@ module lsbad(array, layer=0) {
   for (i=[0:len(array)-1]) {
     e = array[i];
     if (rank(e)>1) lsbad(e, layer+1);
-    else if (!valid3d(e)) echo(layer=layer, i=i, e);
+    else if (len(e)==2 && !valid2d(e)) echo(layer=layer, i=i, e);
+    else if (len(e)==3 && !valid3d(e)) echo(layer=layer, i=i, e);
   }
 }
 
@@ -1946,7 +1947,7 @@ module cut_bin(dm, wall, cut=0, apart=100, flip=true, origin, debug=false) {
   clip_ceiling(cut, w=w, depth=dm[2]+10) hollow(dm, wall, origin) children();
 }
 
-// make a case with lid from any profile (see also basic_case, cover_case in objects.scad)
+// make a case with lid from any profile (see also basic_case, cover_case in object.scad)
 // h=case height, b=bin height, t=thickness, j=joiner height, g=joiner gap
 module case_extrude(profile, h=30, b=24, t=2.8, j=4, g=0.1, bin=true, lid=true, debug=false) {
   sp = span(minmax(slice(profile, 0))) + t*2 + 20;

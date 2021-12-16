@@ -1,26 +1,4 @@
-// legacy only
-//EE = [[0,0],[1,0]];
-//NN = [[0,0],[0,1]];
-//WW = [[0,0],[-1,0]];
-//SS = [[0,0],[0,-1]];
-//NE = cw_path([0,0],[1,1]);
-//WN = cw_path([0,0],[-1,1]);
-//SW = cw_path([0,0],[-1,-1]);
-//ES = cw_path([0,0],[1,-1]);
-//EN = ccw_path([0,0],[1,1]);
-//NW = ccw_path([0,0],[-1,1]);
-//WS = ccw_path([0,0],[-1,-1]);
-//SE = ccw_path([0,0],[1,-1]);
-//NES = cw_path([0,0],[1,0],po=[0.5,0]);
-//WNE = cw_path([0,0],[0,1],po=[0,0.5]);
-//SWN = cw_path([0,0],[-1,0],po=[-0.5,0]);
-//ESW = cw_path([0,0],[0,-1],po=[0,-0.5]);
-//ENW = ccw_path([0,0],[0,1],po=[0,0.5]);
-//NWS = ccw_path([0,0],[-1,0],po=[-0.5,0]);
-//WSE = ccw_path([0,0],[0,-1],po=[0,-0.5]);
-//SEN = ccw_path([0,0],[1,0],po=[0.5,0]);
-
-function GO(d, a) = [[0,0],d*[cos(a),sin(a)]];
+function GO(d, a) = [[0,0],d*[cos(a),sin(a)]]; // distance, angle
 function CW(x, y) = cw_path([0,0],[x,y]);
 function CCW(x, y) = ccw_path([0,0],[x,y]);
 function CWC(x, y) = cw_path([0,0],[x,y],po=[x/2,y/2]);
