@@ -1589,6 +1589,7 @@ module cyan(a=1) color("cyan", alpha=a) children();
 module gold(a=1) color("gold", alpha=a) children();
 module pink(a=1) color("pink", alpha=a) children();
 module black(a=1) color("black", alpha=a) children();
+module yellow(a=1) color("yellow", alpha=a) children();
 module magenta(a=1) color("magenta", alpha=a) children();
 
 // change opacity of children
@@ -1665,6 +1666,7 @@ module unsharp(amount) {
 // vertical shafts at a list of locations
 // zz=[min,max] along z axis, m=diameter, h=head countersink, t=tail countersink, g=gap
 module shaft(locs=[[0,0]], zz=[-0.01,10], m=3, h, t, g=0, debug) {
+  zz = is_list(zz) ? zz : [0,zz];
   for (p=locs) highlight(debug) hole(p, zz, m, h, t, -g, ext=0);
   children();
 }
@@ -1807,7 +1809,7 @@ module bottle_thread(m, pitch=4, h=[0,10], w=[1.2,0.8], a=0, n=1, cap=false, gap
   g = [let(d=k*m*PI) for (t=quanta(d/$fs)) let(a=t*k*360) [r*cos(a),r*sin(a),hh*t-(cap||n==1?0:w1*3*max(0,1-d*t/6)^7)]];
   radiate(n) ascend(h0) {
     spin(a) fillet_sweep(round_path(w0, w1, cap ? [90,270] : [-90,90]), g, c1=2, twist=(!cap && n>1));
-    if (!cap && n>1) translate(g[len(g)-1]-[0,0,w1*1.9]) sphere(w1*0.9); // bump
+    if (!cap && n>1) orient(force2d(g[len(g)-1]), [0,1]) slide(y=r+0.1) flipx(-90, -w1*1.9) dome(w1*2); // bump
   }
   children();
 }
@@ -2065,12 +2067,13 @@ module layered_block(layers, loop=false, invert=false) {
   }
 }
 
-// create a vase-shape layered shell using an inner wall formed by offseting the layers inward
-// skip=how many layers to skip at the bottom, to control the thickness of the base
-module layered_vase(layers, inner=0.8, skip=3) {
-//p = concat(layers, [for (l=reverse(subarray(layers, skip))) overlay(offset2d(l, -inner), slice(l, 2))]);
-  p = concat(layers, [for (l=reverse(subarray(layers, skip))) expand2d(l, -inner)]);
-  layered_block(p);
+// create a layered shell by thickening each layer outward (or inward if negative)
+// skip=how many layers to skip at the bottom, to create a floor
+module layered_shell(layers, t=1.6, skip=0) {
+  if (t!=0) {
+    m = [for (i=[len(layers)-1:-1:0]) let(l=layers[i], c=offset2d(l, t)) [for (j=[0:len(l)-1]) [c[j][0],c[j][1],l[j][2]]]];
+    layered_block(snip(reverse(concat(layers, m), enable=t>0), skip), loop=skip==0);
+  }
 }
 
 // create a dome-shape layered shell using an inner wall formed by offseting the layers inward
@@ -2112,7 +2115,7 @@ module sweep(profile, path, scaler, s=0, loop=false) {
 // ====================================================================
 
 // raise up children
-module ascend(z=0.001) translate([0,0,z]) children();
+module ascend(z=0.001, enable=true) if (enable) translate([0,0,z]) children(); else children();
 
 // similar to translate but defaults to zero for undefined axes
 module slide(x=0, y=0, z=0) translate([x,y,z]) children();
