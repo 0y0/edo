@@ -88,7 +88,7 @@ function ifundef(a, exp) = (a!=undef ? a : exp);
 function ifnan(a, exp) = (a==a ? a : exp);
 
 // check if value falls inclusively inside a range, undef means unlimited
-function within(a, l, h) = (ifdef(l, a>=l, true) && ifdef(h, a<=h, true));
+function within(a, l, h) = (l==undef ? true : a>=l) && (h==undef ? true : a<=h);
 
 // check if a is within the inclusive range [b-e,b+e]
 function vicinity(a, b, e=0.001) = a>=b-e && a<=b+e;
@@ -534,13 +534,13 @@ function loop2d(paths=[], from) = let(c=fuse(concat2d(paths, from), loop=true)) 
 // extend a path by concatenating a scaled copy of itself across x-axis and/or y-axis (default is x-axis)
 function mirror2d(path, xs=-1, ys=1) = concat(path, [for (p=reverse(path)) [p[0]*xs,p[1]*ys]]);
 
-// remove points outside of retangular range
-function within2d(points, x1, x2, y1, y2) = [for (p=points) if (within(p[0], x1, x2) && within(p[1], y1, y2)) p];
-
 // remove points outside of y-range (l=low, h=high)
-function filter2d(points, l, h) = [for (p=points) if (within(p[1], l, h)) p];
+function band2d(points, l, h) = [for (p=points) if (within(p[1], l, h)) p];
 
-// remove points outside a circle of radius r at center
+// remove points outside of retangular range (see spot2d())
+function court2d(points, x1, x2, y1, y2) = [for (p=points) if (within(p[0], x1, x2) && within(p[1], y1, y2)) p];
+
+// remove points outside a circle of radius r at center (see court2d())
 function spot2d(points, r, center=[0,0]) = [for (p=points) if (norm(p-center) <= r) p];
 
 // find intersection of two line segments s1=[p0,p1] and s2=[p2,p3], including end points
@@ -2662,17 +2662,17 @@ module morph_case(p1, p2, h, guide, cut=0.5, s=0, j=5, inner=0.95, visible=true)
   w = box2dw(p1)+5;
 
 // lower part
-  h1 = within2d(guide, 0, 1, 0, cut);
-  h2 = within2d(guide*inner, 0, 1, cut, cut+j/h);
+  h1 = court2d(guide, 0, 1, 0, cut);
+  h2 = court2d(guide*inner, 0, 1, cut, cut+j/h);
   e1 = last(h1);
   e2 = last(h2);
-  h3 = reverse(within2d(guide*inner*inner, 0, 1, 1-inner, e2[1]));
+  h3 = reverse(court2d(guide*inner*inner, 0, 1, 1-inner, e2[1]));
   g1 = concat(h1, [[h2[0][0], e1[1]]], shift2d(h2, [-gap,0]), [[h3[0][0], e2[1]]], h3);
   if (visible) translate([w/2,0,0]) morph_extrude(p1, p2, h, g1);
 
 // upper part
-  h4 = reverse(within2d(guide, 0, 1, cut, 1));
-  h5 = within2d(guide*inner, 0, 1, cut, 1);
+  h4 = reverse(court2d(guide, 0, 1, cut, 1));
+  h5 = court2d(guide*inner, 0, 1, cut, 1);
   g2 = concat(h4, [e1, [h2[0][0], e1[1]]], h5);
   translate([-w/2,0,-e1[1]*h]) {
     if (visible) morph_extrude(p1, p2, h, reverse(g2));
