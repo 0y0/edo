@@ -1748,9 +1748,10 @@ module breadboard(w=80, d=50, h=1.5, r=0.5) {
   punch([[w/2-3,0],[-w/2+3,0]], [0,2]) plate(quad_path(w, d), h, r=r);
 }
 
-// vertical screw added to children
-// m=screw_diameter, h=[start_height, end_height], b=[bottom_space, top_space], open=hole_size, taper=thread_tapering
-module screw_thread(m=3, pitch=0.5, h=[0,10], b=[0,0], gap=0, open=0, taper=true, flat=true) {
+// vertical screw thread added to children
+// m=screw_diameter, h=[start_height, end_height], b=[bottom_space, top_space], open=hole_size,
+// taper=thread_tapering, flat=flat_top, v=screw_thread_depth
+module screw_thread(m=3, pitch=0.5, h=[0,10], b=[0,0], gap=0, open=0, taper=true, flat=true, v) {
   p = pitch;
   h0 = is_list(h) ? h[0] : 0;
   h1 = is_list(h) ? h[1] : h;
@@ -1758,7 +1759,7 @@ module screw_thread(m=3, pitch=0.5, h=[0,10], b=[0,0], gap=0, open=0, taper=true
   b0 = max(0, is_list(b) ? b[0] : b); // bottom non-threaded space
   b1 = max(0, is_list(b) ? b[1] : 0); // top non-threaded space
   bb = hh-b0-b1;
-  v = p*sqrt(3)/2; // depth of thread
+  v = ifundef(v, p*sqrt(3)/2); // depth of thread
   ppr = _fn(m/2); // points per revolution
   r = v/(p/2);
   margin = 0.02;
@@ -1777,7 +1778,7 @@ module screw_thread(m=3, pitch=0.5, h=[0,10], b=[0,0], gap=0, open=0, taper=true
 
 // vertical nut thread inside a ring or, if given, carved from children
 // m=[screw_diameter, ring_diameter], h=[start_height, end_height], b=[bottom_space, top_space]
-module nut_thread(m=[3,5], pitch=0.5, h=[0,10], b=[0,0], gap=0.4, debug=false) {
+module nut_thread(m=[3,5], pitch=0.5, h=[0,10], b=[0,0], gap=0.4, debug=false, v) {
   d0 = is_list(m) ? m[0] : m;
   d1 = is_list(m) ? m[1] : m+pitch*sqrt(3)/2+gap;
   h0 = is_list(h) ? h[0] : 0;
@@ -1788,11 +1789,11 @@ module nut_thread(m=[3,5], pitch=0.5, h=[0,10], b=[0,0], gap=0.4, debug=false) {
   hx = ($children==0 && hh-b0-b1>0) ? [h0-pitch-b0-0.01,h1+pitch+b1+0.01] : [h0-0.01,h1+0.01];
   if ($children) difference() { // carve from children
     children();
-    highlight(debug) screw_thread(m=d0, pitch=pitch, h=hx, b=b, gap=-gap, open=0);
+    highlight(debug) screw_thread(m=d0, pitch=pitch, h=hx, b=b, gap=-gap, open=0, v=v);
   }
   else difference() { // carve from a cylinder
     ascend(h0+0.01) cylinder(d=d1, h=hh-0.02, $fn=_fn(d1/2));
-    highlight(debug) screw_thread(m=d0, pitch=pitch, h=hx, b=b, gap=-gap, open=0);
+    highlight(debug) screw_thread(m=d0, pitch=pitch, h=hx, b=b, gap=-gap, open=0, v=v);
   }
 }
 
@@ -2067,12 +2068,14 @@ module layered_block(layers, loop=false, invert=false) {
   }
 }
 
-// create a layered shell by thickening each layer outward (or inward if negative)
+// create a layered shell by thickening each layer outward (or inward if negative), requires coplanar layers
 // skip=how many layers to skip at the bottom, to create a floor
-module layered_shell(layers, t=1.6, skip=0) {
+module layered_shell(layers, t=1.6, skip=0, flat=true) {
   if (t!=0) {
-    m = [for (i=[len(layers)-1:-1:0]) let(l=layers[i], c=offset2d(l, t)) [for (j=[0:len(l)-1]) [c[j][0],c[j][1],l[j][2]]]];
-    layered_block(snip(reverse(concat(layers, m), enable=t>0), skip), loop=skip==0);
+    e = len(layers)-1;
+    m1 = [for (i=[e:-1:0]) let(l=layers[i], c=offset2d(l, t)) [for (j=[0:len(l)-1]) [c[j][0],c[j][1],l[j][2]]]];
+    m2 = flat ? [] : [let(p=layers[e], h=p[0][2], tt=abs(t)) for (i=snip(arc_path(tt, [0,180]), 1, 1)) force3d(offset2d(p, t/2-i[0]), h+i[1])];
+    layered_block(snip(reverse(concat(layers, m2, m1), enable=t>0), skip), loop=skip==0);
   }
 }
 
