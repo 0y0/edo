@@ -1751,13 +1751,13 @@ module breadboard(w=80, d=50, h=1.5, r=0.5) {
 // vertical screw thread added to children
 // m=screw_diameter, h=[start_height, end_height], b=[bottom_space, top_space], open=hole_size,
 // taper=thread_tapering, flat=flat_top, v=screw_thread_depth
-module screw_thread(m=3, pitch=0.5, h=[0,10], b=[0,0], gap=0, open=0, taper=true, flat=true, v) {
+module screw_thread(m=3, pitch=0.5, h=[0,10], b=[0,0], gap=0, open=0, taper=true, flat=true, debug=false, v) {
   p = pitch;
   h0 = is_list(h) ? h[0] : 0;
   h1 = is_list(h) ? h[1] : h;
   hh = h1-h0;
-  b0 = max(0, is_list(b) ? b[0] : b); // bottom non-threaded space
-  b1 = max(0, is_list(b) ? b[1] : 0); // top non-threaded space
+  b0 = is_list(b) ? b[0] : b; // bottom non-threaded space
+  b1 = is_list(b) ? b[1] : 0; // top non-threaded space
   bb = hh-b0-b1;
   v = ifundef(v, p*sqrt(3)/2); // depth of thread
   ppr = _fn(m/2); // points per revolution
@@ -1765,13 +1765,13 @@ module screw_thread(m=3, pitch=0.5, h=[0,10], b=[0,0], gap=0, open=0, taper=true
   margin = 0.02;
   xsec = [[-margin,0,0.75*v/r], [v*5/8,0,p/16], [v*5/8,0,-p/16], [-margin,0,-0.75*v/r]];
   mesh = [for (t=quanta(ppr*bb/p, end=1.01)) let(a=t*bb*360/p+(h0+b0)*360/p) shift3d(spin3d(xsec*(taper ? scale_guide(t) : 1), a), [(m/2-v*5/8-gap)*cos(a),(m/2-v*5/8-gap)*sin(a),t*bb])];
-  ascend(h0) intersection() {
+  highlight(debug) ascend(h0) intersection() {
     union() {
-      if (hh>0 && bb>0) ascend(b0) layered_block(mesh);
-      if (open == 0) cylinder(d=m-v*5/4-gap*2, h=hh, $fn=ppr);
-      else pipe(d=m-v*5/4-gap*2, h=hh, t=-open/2, flat=flat);
+      if (hh>0 && bb>0 && v>0) ascend(b0) layered_block(mesh);
+      if (open==0) cylinder(d=m-v*5/4-gap*2, h=hh, $fn=ppr);
+      else if (open<m) pipe(d=m-v*5/4-gap*2, h=hh, t=-open/2, flat=flat);
     }
-    cylinder(d=m-gap*2+margin*2, h=hh, $fn=ppr);
+    cylinder(d=m-gap*2+margin*2, h=hh+0.01, $fn=ppr);
   }
   children();
 }
@@ -1780,20 +1780,16 @@ module screw_thread(m=3, pitch=0.5, h=[0,10], b=[0,0], gap=0, open=0, taper=true
 // m=[screw_diameter, ring_diameter], h=[start_height, end_height], b=[bottom_space, top_space]
 module nut_thread(m=[3,5], pitch=0.5, h=[0,10], b=[0,0], gap=0.4, debug=false, v) {
   d0 = is_list(m) ? m[0] : m;
-  d1 = is_list(m) ? m[1] : m+pitch*sqrt(3)/2+gap;
+  d1 = is_list(m) ? m[1] : d0+gap*2+0.02;
   h0 = is_list(h) ? h[0] : 0;
   h1 = is_list(h) ? h[1] : h;
   hh = h1-h0;
   b0 = max(0, is_list(b) ? b[0] : b); // bottom non-threaded space
   b1 = max(0, is_list(b) ? b[1] : 0); // top non-threaded space
-  hx = ($children==0 && hh-b0-b1>0) ? [h0-pitch-b0-0.01,h1+pitch+b1+0.01] : [h0-0.01,h1+0.01];
-  if ($children) difference() { // carve from children
-    children();
-    highlight(debug) screw_thread(m=d0, pitch=pitch, h=hx, b=b, gap=-gap, open=0, v=v);
-  }
-  else difference() { // carve from a cylinder
-    ascend(h0+0.01) cylinder(d=d1, h=hh-0.02, $fn=_fn(d1/2));
-    highlight(debug) screw_thread(m=d0, pitch=pitch, h=hx, b=b, gap=-gap, open=0, v=v);
+  bx = [b0>0 ? b0 : b0-pitch, b1>0 ? b1 : b1-pitch]; // fully open when b<=0
+  difference() { // carve from children or a cylinder
+    if ($children) children(); else ascend(h0+0.01) cylinder(d=d1, h=hh-0.02, $fn=_fn(d0/2));
+    highlight(debug) screw_thread(m=d0, pitch=pitch, h=[h0-0.01,h1+0.01], b=bx, gap=-gap, open=0, v=v);
   }
 }
 
@@ -2161,10 +2157,10 @@ module scatter(x=0, y=0, z=0, copy=0, enable=true) {
   if (!enable || $children==0 || d==0 || copy==1) children(); // do nothing
   else {
     c = copy>0 ? copy : $children;
-    m = [0,c,floor(sqrt(c)),floor(pow(c, 1/3))][d];
-    nx = x==0 ? 1 : d==2 && m*m<c ? m+1 : m;
-    ny = y==0 ? 1 : d==2 && m*m<c ? m+1 : m;
-    nz = z==0 ? 1 : (d==2 && m*m<c) || (d==3 && m*m*m<c) ? m+1 : m;
+    m = floor([0,c,sqrt(c),pow(c, 1/3)][d]);
+    nx = x==0 ? 1 : (d==2 && m*m<c) || (d==3 && m*m*m<c) ? m+1 : m;
+    ny = y==0 ? 1 : (d==2 && m*m<c && nx*m<c) || (d==3 && m*m*m<c && nx*m*m<c) ? m+1 : m;
+    nz = z==0 ? 1 : ceil(c/nx/ny);
     cx = (nx-1)*x/2;
     cy = (ny-1)*y/2;
     cz = (nz-1)*z/2;
