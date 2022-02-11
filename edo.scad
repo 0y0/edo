@@ -269,6 +269,9 @@ function pairs(array, range=0) = let(k=len(array)-1) [for (i=[0:k], j=[0:k]) if 
 // 3D path functions
 // ====================================================================
 
+// convert to a 2D point
+function as2d(point=0, y=0) = [ifundef(point[0], point), ifundef(point[1], y)];
+
 // check if a path looks like a loop with evenly spaced points
 function loopish(path) = let(n=len(path)-1) n>3 && norm(path[n]-path[0])<min(norm(path[n]-path[n-1]),norm(path[1]-path[0]))*2;
 
@@ -897,7 +900,7 @@ function spin3d(points, a) = points * m3_spin(a);
 // compute collective normal for a loop
 function cross3d(points, i=0, u) = let(k=len(points), u=ifundef(u, points[1]-points[0])) i<k-2 ? let(v=points[(i+2)%k]-points[0]) cross(u, v) + cross3d(points, i+1, v) : points[0]*0;
 
-// convert points to 3D, set z if provided, otherwise preserve z or default to 0 {see ascend3d()}
+// convert points to 3D, set/override z if provided, otherwise preserve z or default to 0 {see ascend3d()}
 function force3d(points, z) = rank(points)>1 ? [for (p=points) [p[0],p[1],z==undef?ifundef(p[2],0):z]] : [points[0],points[1],z==undef?ifundef(points[2],0):z];
 
 // shake up 3D points
@@ -1136,15 +1139,16 @@ function sweep_pipe(profile, path, loop=false, s=0, f=0.3, i=0, a, m, t) = let(k
   concat(sweep_pipe(c, path, loop, s, f, i+1, a, a*mm, tt), [cp]);
 
 function sweep_wall(profile, path, loop=false, s=0, i=0, m, t) = let(k=len(path)) i==k ? [] :
-  let(profile=i==0 ? force3d(profile) : profile, ti=sweep_tangent(path, loop, k, i))
-  let(tt=[ti[0],ti[1],0], mm=(i==0 ? m3_rotate([0,-1,0])*m3_rotate(tt, [0,1,0]) : m*m3_rotate(tt, t)))
-  concat(sweep_wall(profile, path, loop, s, i+1, mm, tt), [shift3d(profile*mm, path[i])]);
+  let(profile=i==0 ? force3d(profile) : profile, ti=sweep_tangent(path, loop, k, i), tt=[ti[0],ti[1],0])
+  let(mp=m3_rotate([0,-ti[2]/norm(tt),1]), mm=(i==0 ? m3_rotate([0,-1,0])*m3_rotate(tt, [0,1,0]) : m*m3_rotate(tt, t)))
+  concat(sweep_wall(profile, path, loop, s, i+1, mm, tt), [shift3d(profile*mp*mm, path[i])]);
 
 function sweep_layers(layers, path, loop=false, s=0, twist=true, i=0, a, m, t) = let(k=len(path)) i==k ? [] :
   let(a=i==0 ? twist ? m3_spin(sweep_twist(path, loop, k, -s)) : m3_ident() : a)
   let(c=layers[floor(len(layers)*i/k)], ti=sweep_tangent(path, loop, k, i), tt=twist ? ti : [ti[0],ti[1],0]) 
   let(mm=(i==0 ? m3_rotate([0,-1,0])*m3_rotate(tt, [0,1,0]) : m*m3_rotate(tt, t)))
-  concat(sweep_layers(layers, path, loop, s, twist, i+1, a, a*mm, tt), [shift3d(force3d(c, 0)*mm, path[i])]);
+  let(mc=twist ? mm : m3_rotate([0,-ti[2]/norm(tt),1])*mm)
+  concat(sweep_layers(layers, path, loop, s, twist, i+1, a, a*mm, tt), [shift3d(force3d(c, 0)*mc, path[i])]);
 
 // subroutine to find tangent at point i of path, k=length of path
 function sweep_tangent(path, loop, k, i) = 
@@ -1579,7 +1583,7 @@ module dodecabouquet(d, n=1, v, f) {
 function peek(exp, val) = let(e=ifundef(val, exp)) echo(peek=e) e;
 
 // echo value conditionally for debugging, e.g. val=tee(a*b+c, a>b)
-function tee(exp, label, enable=false) = enable ? echo(label ? str(label, "=", strc(exp)) : exp) exp : exp;
+function tee(exp, label, enable=true) = enable ? echo(label ? str(label, "=", strc(exp)) : exp) exp : exp;
 
 // change color and opacity of children
 module red(a=1) color("red", alpha=a) children();
@@ -1750,8 +1754,8 @@ module breadboard(w=80, d=50, h=1.5, r=0.5) {
 
 // vertical screw thread added to children
 // m=screw_diameter, h=[start_height, end_height], b=[bottom_space, top_space], open=hole_size,
-// taper=thread_tapering, flat=flat_top, v=screw_thread_depth
-module screw_thread(m=3, pitch=0.5, h=[0,10], b=[0,0], gap=0, open=0, taper=true, flat=true, debug=false, v) {
+// taper=thread_tapering, flat=flat_top, v=thread_depth_scaler
+module screw_thread(m=3, pitch=0.5, h=[0,10], b=[0,0], gap=0, open=0, taper=true, flat=true, v=1, debug=false) {
   p = pitch;
   h0 = is_list(h) ? h[0] : 0;
   h1 = is_list(h) ? h[1] : h;
@@ -1759,17 +1763,17 @@ module screw_thread(m=3, pitch=0.5, h=[0,10], b=[0,0], gap=0, open=0, taper=true
   b0 = is_list(b) ? b[0] : b; // bottom non-threaded space
   b1 = is_list(b) ? b[1] : 0; // top non-threaded space
   bb = hh-b0-b1;
-  v = ifundef(v, p*sqrt(3)/2); // depth of thread
+  td = v*p*sqrt(3)/2; // depth of thread
   ppr = _fn(m/2); // points per revolution
-  r = v/(p/2);
+  r = td/(p/2);
   margin = 0.02;
-  xsec = [[-margin,0,0.75*v/r], [v*5/8,0,p/16], [v*5/8,0,-p/16], [-margin,0,-0.75*v/r]];
-  mesh = [for (t=quanta(ppr*bb/p, end=1.01)) let(a=t*bb*360/p+(h0+b0)*360/p) shift3d(spin3d(xsec*(taper ? scale_guide(t) : 1), a), [(m/2-v*5/8-gap)*cos(a),(m/2-v*5/8-gap)*sin(a),t*bb])];
+  xsec = [[-margin,0,0.75*td/r], [td*5/8,0,p/16], [td*5/8,0,-p/16], [-margin,0,-0.75*td/r]];
+  mesh = [for (t=quanta(ppr*bb/p, end=1.01)) let(a=t*bb*360/p+(h0+b0)*360/p) shift3d(spin3d(xsec*(taper ? scale_guide(t) : 1), a), [(m/2-td*5/8-gap)*cos(a),(m/2-td*5/8-gap)*sin(a),t*bb])];
   highlight(debug) ascend(h0) intersection() {
     union() {
-      if (hh>0 && bb>0 && v>0) ascend(b0) layered_block(mesh);
-      if (open==0) cylinder(d=m-v*5/4-gap*2, h=hh, $fn=ppr);
-      else if (open<m) pipe(d=m-v*5/4-gap*2, h=hh, t=-open/2, flat=flat);
+      if (hh>0 && bb>0 && td>0) ascend(b0) layered_block(mesh);
+      if (open==0) cylinder(d=m-td*5/4-gap*2, h=hh, $fn=ppr);
+      else if (open<m) pipe(d=m-td*5/4-gap*2, h=hh, t=-open/2, flat=flat);
     }
     cylinder(d=m-gap*2+margin*2, h=hh+0.01, $fn=ppr);
   }
@@ -1778,7 +1782,7 @@ module screw_thread(m=3, pitch=0.5, h=[0,10], b=[0,0], gap=0, open=0, taper=true
 
 // vertical nut thread inside a ring or, if given, carved from children
 // m=[screw_diameter, ring_diameter], h=[start_height, end_height], b=[bottom_space, top_space]
-module nut_thread(m=[3,5], pitch=0.5, h=[0,10], b=[0,0], gap=0.4, debug=false, v) {
+module nut_thread(m=[3,5], pitch=0.5, h=[0,10], b=[0,0], gap=0.4, v=1, debug=false) {
   d0 = is_list(m) ? m[0] : m;
   d1 = is_list(m) ? m[1] : d0+gap*2+0.02;
   h0 = is_list(h) ? h[0] : 0;
@@ -1793,27 +1797,27 @@ module nut_thread(m=[3,5], pitch=0.5, h=[0,10], b=[0,0], gap=0.4, debug=false, v
   }
 }
 
-// thread on a bottle: m=neck diameter, w=thread dimensions, a=spin, n=count, cap=cap mode, gap=spacing
+// thread on a bottle: d=neck diameter, w=thread dimensions, b=baseline, a=spin, n=count, cap=cap mode, gap=spacing
 // when n>1 and !cap, each thread bends down to provide a stop for the lug neck finish
-module bottle_thread(m, pitch=4, h=[0,10], w=[1.2,0.8], a=0, n=1, cap=false, gap=0.5) {
+module bottle_thread(d, pitch=4, h=[0,10], w=[1.2,0.8], b=0, a=0, n=1, cap=false, gap=0) {
   w0 = opt(w, 0) + (cap ? 0.1 : 0);
   w1 = opt(w, 1);
-  r = m/2 + (cap ? w0+gap : -0.1);
+  r = d/2 + (cap ? w0+gap : -gap-0.1);
   h0 = is_list(h) ? h[0] : 0;
   h1 = is_list(h) ? h[1] : h;
   hh = h1-h0;
   k = hh/pitch; // how many rounds
-  g = [let(d=k*m*PI) for (t=quanta(d/$fs)) let(a=t*k*360) [r*cos(a),r*sin(a),hh*t-(cap||n==1?0:w1*3*max(0,1-d*t/6)^7)]];
-  radiate(n) ascend(h0) {
-    spin(a) fillet_sweep(round_path(w0, w1, cap ? [90,270] : [-90,90]), g, c1=2, twist=(!cap && n>1));
-    if (!cap && n>1) orient(force2d(g[len(g)-1]), [0,1]) slide(y=r+0.1) flipx(-90, -w1*1.9) dome(w1*2); // bump
+  g = [let(d=k*d*PI, a0=360*h0/pitch) for (t=quanta(ceil(d/$fs))) let(a=a0+t*k*360) [r*cos(a),r*sin(a),b+h0+hh*t-(cap||n==1?0:w1*3*max(0,1-d*t/6)^7)]];
+  radiate(n) spin(a) {
+    fillet_sweep(round_path(w0, w1, cap?[90,270]:[-90,90]), g, c1=2, twist=false);
+    if (!cap && n>1) let(e=g[len(g)-1]) orient(force2d(e)) slide(x=r+0.1) flipy(90, e[2]-w1*2.1) dome(w1*2); // bump
   }
   children();
 }
 
 // thread on a cap (unlike nut_thread, not a negative space), to pair with bottle_thread()
-module cap_thread(m, pitch=4, h=[0,10], w=[1.2,0.8], a=0, n=1, gap=0.5) {
-  bottle_thread(m=m, pitch=pitch, h=h, w=w, a=a, n=n, cap=true, gap=gap) children();
+module cap_thread(d, pitch=4, h=[0,10], w=[1.2,0.8], b=0, a=0, n=1, gap=0.5) {
+  bottle_thread(d=d, pitch=pitch, h=h, w=w, b=b, a=a, n=n, cap=true, gap=gap) children();
 }
 
 // cut nut holes at a list of locations
