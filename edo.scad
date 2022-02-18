@@ -1635,10 +1635,24 @@ module debug(s1, s2, color="red") {
   }
   children();
 }
+// switchable hiding of children
+module hide(enable=true) {
+  if (!enable) children();
+}
 
 // switchable highlight on children
-module highlight(enable=false) {
+module highlight(enable=true) {
   if (enable) #children(); else children();
+}
+
+// switchable ghosting of children
+module ghost(enable=true) {
+  if (enable) %children(); else children();
+}
+
+// switchable coloring of children
+module paint(c, alpha=1, enable=true) {
+  if (enable) color(c=c, alpha=alpha) children(); else children();
 }
 
 // select one of the children (0..$children-1) or everything if idx is undef
@@ -1659,7 +1673,7 @@ module rnd_color(seed) {
 }
 
 // paint each child with a different palette color, s=starting color
-module paint(s=0) {
+module colorize(s=0) {
   for (i=[0:$children-1]) color(palette(s+i)) children(i);
 }
 
