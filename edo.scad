@@ -1138,10 +1138,11 @@ function sweep_pipe(profile, path, loop=false, s=0, f=0.3, i=0, a, m, t) = let(k
   let(cp=[for (j=c*mm*m3_rotate(v1,tt)) let(q=proj3(j, v1, tt)) q-(q*d)*d+p1])
   concat(sweep_pipe(c, path, loop, s, f, i+1, a, a*mm, tt), [cp]);
 
-function sweep_wall(profile, path, loop=false, s=0, i=0, m, t) = let(k=len(path)) i==k ? [] :
-  let(profile=i==0 ? force3d(profile) : profile, ti=sweep_tangent(path, loop, k, i), tt=[ti[0],ti[1],0])
-  let(mp=m3_rotate([0,-ti[2]/norm(tt),1]), mm=(i==0 ? m3_rotate([0,-1,0])*m3_rotate(tt, [0,1,0]) : m*m3_rotate(tt, t)))
-  concat(sweep_wall(profile, path, loop, s, i+1, mm, tt), [shift3d(profile*mp*mm, path[i])]);
+function sweep_wall(profile, path, loop=false, s=0, tilt=true, i=0, m, t) = let(k=len(path)) i==k ? [] :
+  let(profile=i==0 ? force3d(profile) : profile, ti=sweep_tangent(path, loop, k, i))
+  let(tt=[ti[0],ti[1],0], mp=m3_rotate([0,-ti[2]/norm(tt),tilt?1:1e20]))
+  let(mm=(i==0 ? m3_rotate([0,-1,0])*m3_rotate(tt, [0,1,0]) : m*m3_rotate(tt, t)))
+  concat(sweep_wall(profile, path, loop, s, tilt, i+1, mm, tt), [shift3d(profile*mp*mm, path[i])]);
 
 function sweep_layers(layers, path, loop=false, s=0, twist=true, i=0, a, m, t) = let(k=len(path)) i==k ? [] :
   let(a=i==0 ? twist ? m3_spin(sweep_twist(path, loop, k, -s)) : m3_ident() : a)
@@ -1773,7 +1774,7 @@ module screw_thread(m=3, pitch=0.5, h=[0,10], b=[0,0], gap=0, open=0, taper=true
     union() {
       if (hh>0 && bb>0 && td>0) ascend(b0) layered_block(mesh);
       if (open==0) cylinder(d=m-td*5/4-gap*2, h=hh, $fn=ppr);
-      else if (open<m) pipe(d=m-td*5/4-gap*2, h=hh, t=-open/2, flat=flat);
+      else if (open<m) pipe(d=m-td*5/4-gap*2, h=hh, m=open, flat=flat);
     }
     cylinder(d=m-gap*2+margin*2, h=hh+0.01, $fn=ppr);
   }
@@ -1797,27 +1798,42 @@ module nut_thread(m=[3,5], pitch=0.5, h=[0,10], b=[0,0], gap=0.4, v=1, debug=fal
   }
 }
 
-// thread on a bottle: d=neck diameter, w=thread dimensions, b=baseline, a=spin, n=count, cap=cap mode, gap=spacing
+// thread on a bottle: d=neck_diameter, w=thread_dimensions, b=baseline, a=spin, n=count, cap=cap_mode, gap=spacing
 // when n>1 and !cap, each thread bends down to provide a stop for the lug neck finish
 module bottle_thread(d, pitch=4, h=[0,10], w=[1.2,0.8], b=0, a=0, n=1, cap=false, gap=0) {
-  w0 = opt(w, 0) + (cap ? 0.1 : 0);
+  w0 = opt(w, 0);
   w1 = opt(w, 1);
-  r = d/2 + (cap ? w0+gap : -gap-0.1);
+  r = d/2 + (cap ? sqrt(2+(w0-w1)/w0)*w0+gap+0.1 : -gap-0.2);
   h0 = is_list(h) ? h[0] : 0;
   h1 = is_list(h) ? h[1] : h;
   hh = h1-h0;
   k = hh/pitch; // how many rounds
   g = [let(d=k*d*PI, a0=360*h0/pitch) for (t=quanta(ceil(d/$fs))) let(a=a0+t*k*360) [r*cos(a),r*sin(a),b+h0+hh*t-(cap||n==1?0:w1*3*max(0,1-d*t/6)^7)]];
   radiate(n) spin(a) {
-    fillet_sweep(round_path(w0, w1, cap?[90,270]:[-90,90]), g, c1=2, twist=false);
-    if (!cap && n>1) let(e=g[len(g)-1]) orient(force2d(e)) slide(x=r+0.1) flipy(90, e[2]-w1*2.1) dome(w1*2); // bump
+    fillet_sweep(round_path(w0+0.2, w1, cap?[90,270]:[-90,90]), g, c1=2, twist=false);
+    if (!cap && n>1) let(e=g[len(g)-1]) orient(force2d(e)) slide(x=r+0.1) flipy(90, e[2]-w1*2-0.3) cookie_extrude(ring_path(w1*2), w0*0.8); // bump
   }
   children();
 }
 
 // thread on a cap (unlike nut_thread, not a negative space), to pair with bottle_thread()
-module cap_thread(d, pitch=4, h=[0,10], w=[1.2,0.8], b=0, a=0, n=1, gap=0.5) {
+module cap_thread(d, pitch=4, h=[0,10], w=[1.2,0.8], b=0, a=0, n=1, gap=0) {
   bottle_thread(d=d, pitch=pitch, h=h, w=w, b=b, a=a, n=n, cap=true, gap=gap) children();
+}
+
+// lug threads on a bottle: d=neck_diameter, w=thread_dimensions, b=baseline, a=spin, n=count, cap=cap_mode, gap=spacing
+module bottle_lugs(d, pitch=1, w=[1.2,0.8], b=0, a=0, n=4, cap=false, gap=0) {
+  echo(d=d, pitch=pitch, w=w, b=b, a=a, n=n, cap=cap, gap=gap);
+  w0 = opt(w, 0);
+  w1 = opt(w, 1);
+  n = max(2, n); // at least 2
+  h = pitch*[(cap?w1*2.7/(PI*d):0), 1/(n*2)-(cap?2:1.1)/(PI*d)]; // lower and upper range
+  bottle_thread(d=d, pitch=pitch, h=h, w=w, b=b+(cap?0:w1+0.4), a=a, n=n, cap=cap, gap=gap) children();
+}
+
+// lug threads on a cap, to pair with bottle_lugs()
+module cap_lugs(d, pitch=1, w=[1.2,0.8], b=0, a=0, n=4, gap=0) {
+  bottle_lugs(d=d, pitch=pitch, w=w, b=b, a=a, n=n, cap=true, gap=gap) children();
 }
 
 // cut nut holes at a list of locations
