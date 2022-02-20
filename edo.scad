@@ -127,7 +127,7 @@ function seq(begin, end, delta) = let(d=ifundef(delta, sign(end-begin))) [for (i
 function range(span) = [span[0]:(span[1]-span[0])/span[2]:span[1]+0.0001];
 
 // return a for-loop range in [0,max) equally divided into number of parts
-// set end=1 to produce a closed range [0,max], use max to scale the results
+// set end=1 to produce a closed range [0,max] (0.9999 means not closed), use max to scale the results
 function quanta(parts=100, start=0, end=0.9999, max=1) = parts<1 ? [] : let(s=round2(start,3), e=round2(end,3), d=(e-s)/parts) [((s-start)%1==0?s:s+d)*max:d*max:((e-end)%1==0?e+d/2:end)*max];
 
 // cycle through a list of colors, randomly if seed is given
@@ -180,7 +180,7 @@ function elem(array, idx, loop=false) = loop ? array[mod(idx, len(array))] : arr
 // return a subarray of nearby elements at idx within +/-r range
 function nearby(array, idx, r=1, loop=true) = let(k=len(array)) [for (i=[idx-r:idx+r]) if (loop) array[mod(i, k)] else if (i>=0 && i<k) array[i]];
 
-// split array into n parts (not optimal in uniformity)
+// split array into n parts (uniformity not optimal)
 function split(array, n) = [let (k=len(array), m=ceil(k/n)) for (j=[0:n-1]) [for (i=[m*j:m*j+m-1]) if (i<k) array[i]]];
 
 // rotate array elements in a cyclic fashion (forward for positive n)
@@ -330,7 +330,7 @@ function refine(path, ds, loop) = let(ds=ifundef(ds, $fs*4)) ds<0.02 ? path : le
 
 // simplify a path by removing points until each segment length is roughly ds
 //function coarse(path, ds=1, loop=true, i=0) = i<len(path) ? let(j=path_where(path, ds, i)) j==undef ? (loop ? (norm(path[i]-path[0])>ds*0.65 ? [path[i]] : []) : [last(path)]) : concat([path[i]], coarse(path, ds, loop, max(i+1, ceil(j)))) : [];
-function coarse(path, ds=1, loop=true) = let(p=close_loop(path, enable=loop)) [for (t=quanta(floor(path_length(p)/ds)), end=1) path_lookup(p, t)];
+function coarse(path, ds=1, loop=true) = let(p=close_loop(path, enable=loop)) [for (t=quanta(floor(path_length(p)/ds), end=loop?0.9999:1)) path_lookup(p, t)];
 
 // simplify a path by combining colinear segments, f=colinearity (max is 10)
 function lean(path, f=1, loop, i=0, k) = let(k=ifundef(k, len(path)), loop=ifundef(loop, loopish(path))) i==k ? loop ? [] : [path[k-1]] : let(p=path[i], u=p-path[(i+k-1)%k], v=path[(i+1)%k]-p) concat(colinear(u, v, 1-0.0006*f) && (loop || i>0) ? [] : [p], lean(path, f, loop, i+1, k));
