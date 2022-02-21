@@ -184,7 +184,7 @@ function nearby(array, idx, r=1, loop=true) = let(k=len(array)) [for (i=[idx-r:i
 function split(array, n) = [let (k=len(array), m=ceil(k/n)) for (j=[0:n-1]) [for (i=[m*j:m*j+m-1]) if (i<k) array[i]]];
 
 // rotate array elements in a cyclic fashion (forward for positive n)
-function cyclic(array, n) = let(k=len(array)) [for (i=[0:k-1]) array[(i+n+k)%k]];
+function cyclic(array, n) = let(k=len(array)) [for (i=[n:n+k-1]) array[mod(i, k)]];
 
 // generate an array containing n copies of e
 function repeat(e, n=2) = [for (i=[1:n]) e];
@@ -303,7 +303,7 @@ function seg_length(path, i=0, b, t) = i>len(path)-2 ? [b,t] : let(s=norm(path[i
 function path_length(path, i=0) = i>=len(path)-1 ? 0 : norm(path[i+1]-path[i]) + path_length(path, i+1);
 
 // like lookup() but for both 2D and 3D paths (non-proportional/snaps to existing points) 
-// t in [0,1), e = snap threshold, disable if zero
+// t in [0,1], e = snap threshold, disable if zero
 function path_lookup(path, t, loop=false, e=0) = let(p=close_loop(path, loop), k=len(p), n=k-1, i=floor(t*n), j=t*n-i) i<0||i>=n||j<e ? p[curb(i,k)] : p[i] + j*(p[i+1]-p[i]);
 
 // find array index (as a real number) along path where distance is d
@@ -328,8 +328,7 @@ function polish(path, r=1, loop=true) = r<1 ? path : [for (i=incline(path)) let(
 // refine a path by subdividing long segments into ones shorter than ds, preserving original points
 function refine(path, ds, loop) = let(ds=ifundef(ds, $fs*4)) ds<0.02 ? path : let(loop=ifundef(loop, loopish(path)), p=close_loop(path, loop), k=len(p)-1) snip([for (i=[0:k]) each i==k ? [p[k]] : let(l=norm(p[i+1]-p[i])) l<=ds ? [p[i]] : bridge(p[i], p[i+1], ds)], loop?1:0);
 
-// simplify a path by removing points until each segment length is roughly ds
-//function coarse(path, ds=1, loop=true, i=0) = i<len(path) ? let(j=path_where(path, ds, i)) j==undef ? (loop ? (norm(path[i]-path[0])>ds*0.65 ? [path[i]] : []) : [last(path)]) : concat([path[i]], coarse(path, ds, loop, max(i+1, ceil(j)))) : [];
+// simplify a path by shifting points until each segment length is at least ds
 function coarse(path, ds=1, loop=true) = let(p=close_loop(path, enable=loop)) [for (t=quanta(floor(path_length(p)/ds), end=loop?0.9999:1)) path_lookup(p, t)];
 
 // simplify a path by combining colinear segments, f=colinearity (max is 10)
