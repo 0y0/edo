@@ -31,6 +31,9 @@ function sinh(t) = (exp(t)-exp(-t))/2;
 function cosh(t) = (exp(t)+exp(-t))/2;
 function tanh(t) = let(e=exp(2*t)) (e-1)/(e+1);
 
+// logistic sigmoid function
+function logistic(t) = 1/(1+exp(-t));
+
 // permutation without repetition
 function perm(n, r) = r==1 ? n : perm(n-1, r-1) * n;
 
@@ -139,9 +142,12 @@ function strc(s, color="red") = $NOW ? s : str("<font color='", color, "'>", s, 
 // format array contents as a single string (one element per line)
 function strn(a, i=0) = is_list(a) ? i>=len(a) ? "\n" : str("\n", i, ": ", a[i], strn(a, i+1)) : str(a);
 
-// execute a schema: a parameteric function returning its domain if the argument is undefined
+// execute a schema: a parametric function returning its domain if the argument is undefined
 // example: resolve(function(t) t==undef ? [0:$fa:360-$fa] : [cos(t),sin(t)]*10)
 function resolve(schema) = is_function(schema) ? [for (t=schema()) schema(t)] : schema;
+
+// traverse a parametric function in n equal steps between 0 and 1, optionally including the final point
+function roam(fn, n=10, final=false, reverse=false) = [for (i=reverse?[n:-1:(final?0:1)]:[0:(final?n:n-1)]) fn(i/n)];
 
 // ====================================================================
 // array manipulations
@@ -670,8 +676,8 @@ function ulam(n) = let(
     r = floor((sqrt(n)-1)/2)+1,
     c = (2*r-1)*(2*r-1),
     p = (n-c-4*r+1)/(2*r),
-    x = n == 0 ? 0 : p >= -1 && p <= 0 ? -r : p >= 1 ? r : p <= 0 ? r-(p+2)*2*r : -r+p*2*r,
-    y = n == 0 ? 0 : p >= 0 && p <= 1 ? -r : p <= -1 ? r : p <= 0 ? r-(p+1)*2*r : -r+(p-1)*2*r)
+    x = n==0 ? 0 : p>=-1 && p<=0 ? -r : p>=1 ? r : p<=0 ? r-(p+2)*2*r : -r+p*2*r,
+    y = n==0 ? 0 : p>=0 && p<=1 ? -r : p<=-1 ? r : p<=0 ? r-(p+1)*2*r : -r+(p-1)*2*r)
   [x, y, 0];
 
 // points on a grid of width w and depth d, divided evenly by nw and nd segments respectively
