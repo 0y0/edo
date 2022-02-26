@@ -53,7 +53,7 @@ function golden() = 2/(sqrt(5)-1);
 function fibonacci(n) = n<2 ? n : fibonacci(n-2) + fibonacci(n-1);
 
 // Fresnel integration used for clothoid generation
-function fresnel(t, n=100, i=0, f, s=[0,0]) = i==n ? s : let(g=i==0 ? [1,t/3] : -[f[0]*(4*i-3)/(2*i-1)/(4*i+1),f[1]*(4*i-1)/(2*i+1)/(4*i+3)]*t*t/i/2) fresnel(t, n, i+1, g, s+g);
+fresnel = function(t, n=100, i=0, f, s=[0,0]) i==n ? s : let(g=i==0 ? [1,t/3] : -[f[0]*(4*i-3)/(2*i-1)/(4*i+1),f[1]*(4*i-1)/(2*i+1)/(4*i+3)]*t*t/i/2) fresnel(t, n, i+1, g, s+g);
 
 // ====================================================================
 // utility functions
@@ -146,8 +146,14 @@ function strn(a, i=0) = is_list(a) ? i>=len(a) ? "\n" : str("\n", i, ": ", a[i],
 // example: resolve(function(t) t==undef ? [0:$fa:360-$fa] : [cos(t),sin(t)]*10)
 function resolve(schema) = is_function(schema) ? [for (t=schema()) schema(t)] : schema;
 
-// traverse a parametric function in n equal steps between 0 and 1, optionally including the final point
-function roam(fn, n=10, final=false, reverse=false) = [for (i=reverse?[n:-1:(final?0:1)]:[0:(final?n:n-1)]) fn(i/n)];
+// evaluate a unit parametric function in n equal steps, close=include final point
+function yield(fn, n=10, close=false, reverse=false) = [for (i=reverse?[n:-1:(close?0:1)]:[0:(close?n:n-1)]) fn(i/n)];
+
+// graph a unit parametric function in n equal steps, close=include final point
+function graph(fn, n=10, scaler=[1,1], close=false, reverse=false) = [let (s0=opt(scaler, 0, 1), s1=opt(scaler, 1, 1)) for (i=reverse?[n:-1:(close?0:1)]:[0:(close?n:n-1)]) let(t=i/n) [t*s0,fn(t)*s1]];
+
+// generate a new parametric function which is product of two parametric functions
+fxf = function(fn1, fn2) function(t) fn1(t)*fn2(t);
 
 // ====================================================================
 // array manipulations
@@ -233,7 +239,7 @@ function snip(array, t=1, h=0) = let(k=len(array)) t+h>0 ? [if (k>t+h) for (i=[h
 function prepend(array, e) = let(k=len(array)) k==undef ? [e,array] : [for (i=[0:k]) i==0 ? e : array[i-1]];
 
 // add one element at the tail
-function append(array, e) = let(k=len(array)) k==undef ? [array,e] : [for (i=[0:k]) i<k ? array[i] : e];
+function append(array, e) = is_list(array) ? concat(array, [e]) : [array,e];
 
 // return subarray
 function subarray(array, start=0, end=-1) = let(k=len(array)) [if (k>start) for (i=[min(k-1,start>=0?start:k+start):min(k-1,end>=0?end:k+end)]) array[i]];
@@ -706,7 +712,7 @@ function spiral_path(d, a=[0,360], f=3, start=0, end=1) = let(a0=ifundef(a[0],0)
 
 function arc_path(d=[1,1], a=[0,180]) = let(x=opt(d,0)/2, y=opt(d,1)/2, k=confine(a[1]-a[0], -360, 360), n=ceil(_fn(max(abs(x),abs(y)))*abs(k)/360), m=min(x,y)==0?0:abs(k)<360?n:n-1) [for (i=[0:m]) let(t=a[0]+k*i/n) [cos(t)*x,sin(t)*y]];
 function ring_path(d=10, a=[0,360], s=[1,1]) = let(k=confine(a[1]-a[0], -360, 360), n=ceil(_fn(d/2)*abs(k)/360), m=abs(k)<360?n:n-1) [for (i=[0:m]) let(t=a[0]+k*i/n) [cos(t)*s[0],sin(t)*s[1]]*d/2];
-function apple_path(d=10) = let(n=ceil(_fn(d/2)*1.5)) [for (i=[0:n-1]) apple_locus(i/n)*d];
+function apple_path(d=10) = let(n=ceil(_fn(d/2)*1.5)) [for (i=[0:n-1]) apple_trace(i/n)*d];
 function puffy_path(d=10) = radiate2d(shift2d(round_path(d, a=[-24,24], $fa=$fa/2), [-d/2,0]), 4);
 function bang_path(d=10) = radiate2d(shift2d(round_path(0.1875*d, a=[224,136]), [0.625*d,0]), 12);
 function floral_path(d=10, n=5) = let(c=n+1) [for (t=quanta(_fn2(d)*sqrt(n))) [c*cos(360*t)-cos(c*360*t),c*sin(360*t)-sin(c*360*t)]*d/(2*c)];
@@ -716,8 +722,8 @@ function heart_path(d=10) = [for (t=quanta(_fn(d/2))) let(s=abs(2*t-1), r=0.7*d*
 function poly_path(d=10, n=5) = [for (t=quanta(n)) let(a=180/n+360*t) [cos(a),sin(a)]*d/2];
 function star_path(d=10, n=5, f=4) = [for (i=[0:n*2-1]) let(a=180/n+180*i/n) [cos(a),sin(a)]*d/(i%2?f:2)];
 function wave_path(d=10, n=7, f=5) = [for (t=quanta(_fn(d*n)*2)) let(a=360*t) [cos(a),sin(a)]*(d/2-d*f/50+cos(180+n*a)*d*f/50)];
-function butterfly_path(d=10) = let(n=_fn(d/2)*2) [for (i=[0:n-1]) butterfly_locus(i/n)*d];
-function egg_path(d=10) = let(n=_fn(d/2)) [for (i=[0:n-1]) egg_locus(i/n)*d];
+function butterfly_path(d=10) = let(n=_fn(d/2)*2) [for (i=[0:n-1]) butterfly_trace(i/n)*d];
+function egg_path(d=10) = let(n=_fn(d/2)) [for (i=[0:n-1]) egg_trace(i/n)*d];
 function box_path(w=10, d) = let(d=ifundef(d,w)) [for (t=quanta(_fn(min(w,d)/16)*8)) box_trace(t, [w,d], true)];
 function arch_path(d=10) = [for (t=quanta(_fn(d))) arch_trace(t)-[0.5,0.5]]*d;
 function tear_path(d=10, f=1) = [for (a=quanta(_fn(d/3), max=360)) [(cos(a)-1)*f*d+d, (cos(a)+1)*sin(a)*d/3]/2];
@@ -735,29 +741,22 @@ function pad_path(w, d, r=2, half=false) =
   );
 
 // ====================================================================
-// loci of enclosing shapes: [0,1) -> R^2
-// ====================================================================
-
-function apple_locus(t) = let(a=0.67, b=1.1, p=0.15, q=0.08, u=360*t-90, r=a*(1-sin(u)), d=PI*(u/180-1/2), s=d*d) [-b*r*exp(-q*s)*sin(u)-a*0.4,r*exp(-p*s)*cos(u)];
-function butterfly_locus(t) = let(u=360*t) 0.32*(abs(sin(2*u)) + sin(u/2))*[cos(u),sin(u)] + [0.1,0];
-function egg_locus(t) = let(u=360*t) [4*cos(u),3*sin(u+sin(u)*11)]/8;
-
-// ====================================================================
 // unit guiding functions: [0,1] -> [0,1]
 // ====================================================================
 
-function poly_damp(t, d=3) = (1-pow(1-2*t, d))/2;
-function poly_ease(t, d=3) = let(u=t*2, v=u-2, s=d%2?1:-1) u<1 ? pow(u,d)/2 : s*(pow(v,d)+s*2)/2;
-function line_guide(t, start=1, end) = start+(ifundef(end, 1-start)-start)*t;
-function ripple_guide(t, d=5) = (sin(360*t)+pow(sin(d*180*t),2))/4+0.5;
-function pulse_guide(t) = exp(-5*pow(6*t-1,2)/pow(4+2*t,2));
-function round_guide(t) = sqrt(0.251-pow(t-0.5,2))+0.5;
-function dome_guide(t) = sqrt(1.001-t*t);
-function wave_guide(t, d=4) = (cos(180*d*t)+3)/4;
-function fillet_guide(t, r0=0.1, r1) = let(r1=ifundef(r1,r0)) // r0=head rounding, r1=tail rounding
+poly_damp = function(t, d=3) (1-pow(1-2*t, d))/2;
+poly_ease = function(t, d=3) let(u=t*2, v=u-2, s=d%2?1:-1) u<1 ? pow(u,d)/2 : s*(pow(v,d)+s*2)/2;
+unity_guide = function(t) t;
+line_guide = function(t, start=1, end) start+(ifundef(end, 1-start)-start)*t;
+ripple_guide = function(t, d=5) (sin(360*t)+pow(sin(d*180*t),2))/4+0.5;
+pulse_guide = function(t) exp(-5*pow(6*t-1,2)/pow(4+2*t,2));
+round_guide = function(t) sqrt(0.251-pow(t-0.5,2))+0.5;
+dome_guide = function(t) sqrt(1.001-t*t);
+wave_guide = function(t, d=4) (cos(180*d*t)+3)/4;
+fillet_guide = function(t, r0=0.1, r1) let(r1=ifundef(r1,r0)) // r0=head rounding, r1=tail rounding
   r0!=0 && t<abs(r0) ? (1-r0)+r0*sqrt(1-pow(1-t/abs(r0),2)) :
   r1!=0 && t>1-abs(r1) ? (1-r1)+r1*sqrt(1-pow(1-((1-min(1,t))/abs(r1)),2)) : 1;
-function scale_guide(t, r0=0.1, r1) = let(r1=ifundef(r1,r0)) // r0=head rounding, r1=tail rounding
+scale_guide = function(t, r0=0.1, r1) let(r1=ifundef(r1,r0)) // r0=head rounding, r1=tail rounding
   r0!=0 && t<abs(r0) ? sqrt(1-pow(1-t/abs(r0),2)) :
   r1!=0 && t>1-abs(r1) ? sqrt(1-pow(1-((1-min(1,t))/abs(r1)),2)) : 1;
 
@@ -765,22 +764,25 @@ function scale_guide(t, r0=0.1, r1) = let(r1=ifundef(r1,r0)) // r0=head rounding
 // unit tracing functions: [0,1] -> [0,1]^2 or [0,1]^3
 // ====================================================================
 
-function ring_trace(t, a=0, origin=[0.5,0.5]) = [cos(360*t+a)/2,sin(360*t+a)/2]+origin;
-function wave_trace(t, d=1, f=1) = [t,cos(360*d*t)*f/2+0.5];
-function arch_trace(t) = t<0.5 ? ring_trace(t) : box_trace(t-1/8);
-function box_trace(t, sz=[1,1], center=false) = let(x=sz[0], y=sz[1], k=(t%1)*4, c=(center?sz/2:[0,0]))
+apple_trace = function(t) let(a=0.67, b=1.1, p=0.15, q=0.08, u=360*t-90, r=a*(1-sin(u)), d=PI*(u/180-1/2), s=d*d) [-b*r*exp(-q*s)*sin(u)-a*0.4,r*exp(-p*s)*cos(u)];
+butterfly_trace = function(t) let(u=360*t) 0.32*(abs(sin(2*u)) + sin(u/2))*[cos(u),sin(u)] + [0.1,0];
+egg_trace = function(t) let(u=360*t) [4*cos(u),3*sin(u+sin(u)*11)]/8;
+ring_trace = function(t, a=0, origin=[0.5,0.5]) [cos(360*t+a)/2,sin(360*t+a)/2]+origin;
+wave_trace = function(t, d=1, f=1) [t,cos(360*d*t)*f/2+0.5];
+arch_trace = function(t) t<0.5 ? ring_trace(t) : box_trace(t-1/8);
+box_trace = function(t, sz=[1,1], center=false) let(x=sz[0], y=sz[1], k=(t%1)*4, c=(center?sz/2:[0,0]))
   k<1 ? [x,y]+k*[-x,0]-c :
   k<2 ? [0,y]+(k-1)*[0,-y]-c :
   k<3 ? [0,0]+(k-2)*[x,0]-c :
   [x,0]+(k-3)*[0,y]-c ;
-function puzzle_trace(t) = let(a=127, r=0.3125, x=floor(t), k=(t%1)*4)
+puzzle_trace = function(t) let(a=127, r=0.3125, x=floor(t), k=(t%1)*4)
   k>3 ? [x+1+sin(360-a+(k-3)*a)*r,(1-r)+cos(360-a+(k-3)*a)*r] :
   k>1 ? [x+0.5+cos(270-a+(k-1)*a)*r,r+sin(270-a+(k-1)*a)*r] :
   [x+sin(k*a)*r,(1-r)+cos(k*a)*r];
-function fillet_trace(t, r0=0.1, r1) = let(r1=ifundef(r1,r0)) // r0=head rounding, r1=tail rounding
+fillet_trace = function(t, r0=0.1, r1) let(r1=ifundef(r1,r0)) // r0=head rounding, r1=tail rounding
   r0!=0 && t<r0 ? [1,r0*2]-ring_trace(0.25+0.25*t/r0)*r0*2 :
   r1!=0 && t>1-r1 ? [1,1]-ring_trace(0.75-0.25*(1-t)/r1)*r1*2 : [1,t];
-function inf_trace(t, z=0) = let(a=t*360) [cos(a), sin(a*2)/2, z*sin(a)/4]/(3-cos(a*2)); // 3D, z=z scale
+inf_trace = function(t, z=0) let(a=t*360) [cos(a), sin(a*2)/2, z*sin(a)/4]/(3-cos(a*2)); // 3D, z=z scale
 
 // ====================================================================
 // 2D paths between points
