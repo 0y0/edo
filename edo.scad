@@ -1383,7 +1383,11 @@ module plot(profile, d=0.2, loop=false, color="gold", dot=true, dup=false, div=1
       }
     }
     if (dot && $preview) {
-      for (i=[0:m-1]) color(i==0?"blue":i==m-1?"tan":"brown") translate(p[i]) sphere(d=d+min(d*0.5,i==0?2:1), $fn=_fn(d));
+      for (i=[0:m-1]) translate(p[i]) {
+        s = d + min(d*0.5,i==0?2:1);
+        if (i>0 && i<m) %sphere(d=s, $fn=_fn(d));
+        else color(i==0 ? "blue" : i==m-1 ? "tan" : undef) sphere(d=s, $fn=_fn(d));
+      }
     }
     if (dup && $preview) { // for debugging
       for (i=seams(profile, true)) let(v=profile[i]) color(color) arrow([0,0,-3], [v[0],v[1],ifundef(v[2],0)+3.2]);
