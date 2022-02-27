@@ -537,7 +537,7 @@ function random_profile(d=50, min=4, max=7, f=1, s=5, seed) = let(r=rnd_seed(see
 function radiate2d(path, n, i=1) = i<n ? concat([let(r=m2_rotate(360/n*i)) for (p=path) p*r], radiate2d(path, n, i+1)) : path;
 
 // combine a list of 2D paths end-to-end, a single point in the list is a vector, from=override first point
-function concat2d(paths=[], from, i=0) = let(s=paths[i]) s==undef ? [] : let(p=is_list(s[0])?s:[[0,0],s], d=ifundef(from, p[0])-p[0], k=len(p)) concat([for (i=[(i==0?0:1):k-1]) p[i]+d], concat2d(paths, p[k-1]+d, i+1));
+function concat2d(paths=[], from, i=0) = let(s=paths[i]) s[0]==undef ? [] : let(p=is_list(s[0])?s:[[0,0],s], d=ifundef(from, p[0])-p[0], k=len(p)) concat([for (i=[(i==0?0:1):k-1]) p[i]+d], concat2d(paths, p[k-1]+d, i+1));
 
 // similar to concat2d except that each step is a single vector instead of a path
 function step2d(vectors, from=[0,0], i=0, m) = let(m=ifundef(m, len(vectors)), p=i==0?from:vectors[i-1]+from) concat([p], i==m ? [] : step2d(vectors, p, i+1, m));
@@ -2588,7 +2588,7 @@ module fillet_dome(profile, h=20, t=1.6, r=5, vault=0, v=1, s=0, tidy) {
 // a box of inner dimensions dm, with rounded bottom and corners, negative t means dm is outer dimensions
 module fillet_box(dm, t=1.6, r=5, bottom=true) {
   p = pad_path(dm[0], dm[1], r=min(min(redim(dm, 2))/2-0.01, r));
-  fillet_bin(p, h=dm[2], t=t, bottom=bottom);
+  fillet_bin(p, h=dm[2], t=t, bottom=bottom, tidy=0);
   ascend(t-0.01) children();
 }
 
