@@ -81,9 +81,6 @@ function _fn3(r, n=8) = $fn ? $fn : ceil(max(min(360/$fa, abs(r)*2*PI/$fs)/3, n)
 // check if a is defined
 function has(a) = (a!=undef);
 
-// return exp1 for defined a, else exp2
-function ifdef(a, exp1, exp2=undef) = (a==undef ? exp2 : exp1);
-
 // provide default value for undefined variable
 function ifundef(a, exp) = (a!=undef ? a : exp);
 
@@ -648,7 +645,7 @@ function fence2d(path, t=1, rounded=true, s=0, loop=false, tidy) = len(path)<2 ?
   concat(s1, e2, s2, e1);
 
 // produce a scaled profile by shifting each point a constant distance away from origin (see also scale2d, offset2d)
-function expand2d(profile, by) = [for (p=profile) let(n=norm(force2d(p)),s=(n+by)/n) ifdef(p[2], [p[0]*s,p[1]*s,p[2]], p*s)];
+function expand2d(profile, by) = [for (p=profile) let(n=norm(force2d(p)),s=(n+by)/n) p[2]==undef ? p*s : [p[0]*s,p[1]*s,p[2]]];
 
 // return the bounding box (4 points) of a profile, b=border
 function box2d(profile, b=0) = let(x=minmax(slice(profile,0)), y=minmax(slice(profile,1))) [[x[0]-b,y[0]-b],[x[1]+b,y[0]-b],[x[1]+b,y[1]+b],[x[0]-b,y[1]+b]];
@@ -835,7 +832,7 @@ function proj3(v, d, n) = v-(v*n)/(d*n)*d;
 function proj3d(points, e) = [for (p=points) [p[0],p[1]]*e/(e-p[2])];
 
 // swap coordinates
-function swap_xy(points) = [for (p=points) ifdef(p[2], [p[1],p[0],p[2]], [p[1],p[0]])];
+function swap_xy(points) = [for (p=points) p[2]==undef ? [p[1],p[0]] : [p[1],p[0],p[2]]];
 function swap_yz(points) = [for (p=points) [p[0],ifundef(p[2],0),p[1]]];
 function swap_xz(points) = [for (p=points) [ifundef(p[2],0),p[1],p[0]]];
 
@@ -864,7 +861,7 @@ function euler(v) = let(m=m3_rotate(v)) [atan2(m[1][2], m[2][2]), asin(-m[0][2])
 function colinear(u, v, t=0.9999) = let(d=(u*v)/norm(u)/norm(v)) abs(d)>t ? sign(d) : 0;
 
 // mash points to flatten the population (l=low, h=high)
-function mash3d(points, l, h) = [for (p=points) let(z=ifdef(l,max(l,p[2]),p[2])) [p[0],p[1],ifdef(h,min(h,z),z)]];
+function mash3d(points, l, h) = [for (p=points) let(z=l==undef?p[2]:max(l,p[2])) [p[0],p[1],h?min(h,z):z]];
 
 // remove points outside of z range [l,h]
 function filter3d(points, l, h) = [for (p=points) if (within(p[2], l, h)) p];
@@ -1421,7 +1418,7 @@ module solid(profile, h=1, t=0, bottom=0, scale=1, twist=0, inflate=0, loop=true
 // plot a circle around profile (non-optimal)
 module lasso(profile, s=0.2, loop=true, color="red") {
   e = encircle2d(profile);
-  plot(shift2d(ring_path(e[1]*2), e[0]), s=s, loop=loop, color=color);
+  plot(shift2d(ring_path(e[1]*2), e[0]), d=s, loop=loop, color=color);
 }
 
 // given vertices v, produce a wireframe from edges under certain length (limit * shortest edge)
