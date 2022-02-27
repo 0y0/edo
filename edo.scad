@@ -536,8 +536,8 @@ function random_profile(d=50, min=4, max=7, f=1, s=5, seed) = let(r=rnd_seed(see
 // generate a path by rotating a shorter one n times around the origin
 function radiate2d(path, n, i=1) = i<n ? concat([let(r=m2_rotate(360/n*i)) for (p=path) p*r], radiate2d(path, n, i+1)) : path;
 
-// combine a list of 2D paths end-to-end, optional from=starting point
-function concat2d(paths=[], from, i=0) = let(p=paths[i], from=ifundef(from, p[0])) p[0] ? concat(shift2d(subarray(p, i==0 ? 0 : 1), from-p[0]), concat2d(paths, from-p[0]+last(p), i+1)) : i<len(paths) ? concat2d(paths, from, i+1) : [];
+// combine a list of 2D paths end-to-end, a single point in the list is a vector, from=override first point
+function concat2d(paths=[], from, i=0) = let(s=paths[i]) s==undef ? [] : let(p=is_list(s[0])?s:[[0,0],s], d=ifundef(from, p[0])-p[0], k=len(p)) concat([for (i=[(i==0?0:1):k-1]) p[i]+d], concat2d(paths, p[k-1]+d, i+1));
 
 // similar to concat2d except that each step is a single vector instead of a path
 function step2d(vectors, from=[0,0], i=0, m) = let(m=ifundef(m, len(vectors)), p=i==0?from:vectors[i-1]+from) concat([p], i==m ? [] : step2d(vectors, p, i+1, m));
@@ -1297,6 +1297,17 @@ module shell(profile, h=2, t=1, bottom=0, inflate=0, r=2) {
   } 
 }
 
+// a wall based on profile, t could be negative (see also fillet_tray)
+module wall(profile, h=20, t=1.6, flat=true) {
+  if (t!=0 && h!=0) {
+    tt = abs(t);
+    hh = flat ? abs(h) : abs(h)-tt/2;
+    c = flat ? [-tt,0] : ccw_path([tt,0], [0,0], po=[tt/2,0]);
+    g = concat2d([[tt,0],[0,hh],c,[0,-hh]], [min(0,t),0]);
+    layered_block([for (i=g) force3d(offset2d(profile, i[0]), i[1])], loop=true);
+  }
+}
+
 // a twisted shell enclosing the profile
 // h=height, t=thickness (negative => inner shell), m=hole size, pitch=height per turn (zero => disable twist)
 function rotini(profile, h=20, t=0, m=0, pitch=100) = let(s=t>0?1:0, a=pitch==0?0:360/pitch) concat(
@@ -1314,21 +1325,19 @@ module basin(profile, h=5, t=1, bottom=0, inflate=0, r=2) {
 
 // a strip resting on its side along path, h=height, t=thickness, r=rounding, s=path softening, f=fillet
 module strip(path, h=10, t=1, r=2, s=5, f=1) {
-  r = min(h/2, r);
-  f = max(0, min(t/2-$fs, f));
+  path = soften(path, s, loop=false);
+  f = min(f, h/2-1);
+  r = min(r, h/2-f);
   k = len(path);
-  if (k>1) difference() {
-    p = fence2d(path, t, s=s, rounded=false);
-    fillet_extrude(p, h, xz0=[-f,f], xz1=[-f,f]);
-    translate(path[0]) orient(path[1]-path[0]) {
-      translate([-0.01,0,-0.01]) fillet_bar(t+2, xz=[r,r]);
-      translate([-0.01,0,h+0.01]) fillet_bar(t+2, xz=[r,-r]);
-    }
-    translate(path[k-1]) orient(path[k-2]-path[k-1]) {
-      translate([-0.01,0,-0.01]) fillet_bar(t+2, xz=[r,r]);
-      translate([-0.01,0,h+0.01]) fillet_bar(t+2, xz=[r,-r]);
-    }
-  }
+  c0 = snip(cw_path([0,-1], [1,0], $fs=$fs/r), 1);
+  c1 = snip(cw_path([0,0], [1,-1], $fs=$fs/r), 0, 1);
+  pp = elong(path, -r, -r);
+  e0 = pp[0]-path[0];
+  e1 = path[k-1]-pp[k-1];
+  m0 = r<0.5 ? [] : sweep_layers([for (i=c0) pad_path(t, h+i[1]*r*2, r=f)], [for (i=c0) as3d(path[0]+i[0]*e0)]);
+  m1 = r<0.5 ? [] : sweep_layers([for (i=c1) pad_path(t, h+i[1]*r*2, r=f)], [for (i=c1) as3d(pp[k-1]+i[0]*e1)]);
+  m = concat(m1, sweep_pipe(pad_path(t, h, r=f), force3d(r<0.5?path:pp)), m0);
+  ascend(h/2) layered_block(m);
 }
 
 // a beam between 2 points (cross section is rectangular or circular)
@@ -1848,7 +1857,6 @@ module cap_thread(d, pitch=4, h=[0,10], w=[1.2,0.8], b=0, a=0, n=1, gap=0) {
 
 // lug threads on a bottle: d=neck_diameter, w=thread_dimensions, b=baseline, a=spin, n=count, cap=cap_mode, gap=spacing
 module bottle_lugs(d, pitch=1, w=[1.2,0.8], b=0, a=0, n=4, cap=false, gap=0) {
-  echo(d=d, pitch=pitch, w=w, b=b, a=a, n=n, cap=cap, gap=gap);
   w0 = opt(w, 0);
   w1 = opt(w, 1);
   n = max(2, n); // at least 2
@@ -2284,7 +2292,7 @@ module clone_at(points, rot) {
 module clip_at(points) {
   difference() {
     children(0);
-    for (p=points) translate(p) children(1);
+    if ($children>1) for (p=points) translate(p) children(1);
   }
 }
 
@@ -2541,10 +2549,10 @@ module fillet_tray(profile, h=20, t=1.6, r, bottom=true, flat=true) {
     tt = abs(t);
     rr = max(tt, min(abs(ifundef(r, t)), abs(h)-(flat?0:tt/2)));
     hh = flat ? abs(h) : abs(h)-tt/2;
-    g = concat2d([r==0 ? line_path([tt,0]) : arc_path(rr*2, [-90,0]),
-      if (rr<hh-0.01) line_path([0,hh-(r==0?0:rr)]),
-      flat ? line_path([-tt,0]) : arc_path(tt, [0,180]),
-      if (rr<hh-0.01) line_path([0,-hh+rr]), arc_path((rr-tt)*2, [0,-90])], [t<0?-rr:tt-rr,0]);
+    g = concat2d([r==0 ? [tt,0] : ccw_path([0,-rr], [rr,0], po=[0,0]),
+      if (rr<hh-0.01) [0,hh-(r==0?0:rr)],
+      flat ? [-tt,0] : ccw_path([tt,0], [0,0], po=[tt/2,0]),
+      if (rr<hh-0.01) [0,-hh+rr], cw_path([rr-tt,0], [0,tt-rr], po=[0,0])], [t<0?-rr:tt-rr,0]);
     layered_block([for (i=g) force3d(offset2d(profile, i[0]), i[1])], loop=!bottom);
   }
 }
