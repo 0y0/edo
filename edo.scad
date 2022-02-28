@@ -81,7 +81,7 @@ function _fn3(r, n=8) = $fn ? $fn : ceil(max(min(360/$fa, abs(r)*2*PI/$fs)/3, n)
 // check if a is defined
 function has(a) = (a!=undef);
 
-// provide default value for undefined variable
+// provide default value for undefined variable, beware that exp gets evaluated regardless so it should be a constant
 function ifundef(a, exp) = (a!=undef ? a : exp);
 
 // provide default value for NaN variable
@@ -121,7 +121,7 @@ function rndv() = unit(rands(-1, 1, 3));
 function unit(v) = let(n=norm(v)) n==0 ? v : v/n;
 
 // generate a number sequence, begin and end are inclusive
-function seq(begin, end, delta) = let(d=ifundef(delta, sign(end-begin))) [for (i=[begin:d:end]) i];
+function seq(begin, end, delta) = let(d=(delta!=undef?delta:sign(end-begin))) [for (i=[begin:d:end]) i];
 
 // return a for-loop range [begin:delta:end] using a span definition = [low,high,number of steps]
 function range(span) = [span[0]:(span[1]-span[0])/span[2]:span[1]+0.0001];
@@ -335,13 +335,13 @@ function bridge(p1, p2, ds) = let(v=p2-p1, m=ceil(norm(v)/ds)) [for (t=quanta(m)
 function polish(path, r=1, loop=true) = r<1 ? path : [for (i=incline(path)) let(s=nearby(path, i, r, loop), u=s[0]-s[1], v=s[2]-s[1], d=abs(u*v)/(u*u)/(v*v)) avg(nearby(path, i, r+confine(ceil(d*2), 0, 0), loop=loop))];
 
 // refine a path by subdividing long segments into ones shorter than ds, preserving original points
-function refine(path, ds, loop) = let(ds=ifundef(ds, $fs*4)) ds<0.02 ? path : let(loop=ifundef(loop, loopish(path)), p=close_loop(path, loop), k=len(p)-1) snip([for (i=[0:k]) each i==k ? [p[k]] : let(l=norm(p[i+1]-p[i])) l<=ds ? [p[i]] : bridge(p[i], p[i+1], ds)], loop?1:0);
+function refine(path, ds, loop) = let(ds=ifundef(ds, $fs*4)) ds<0.02 ? path : let(loop=(loop!=undef?loop:loopish(path)), p=close_loop(path, loop), k=len(p)-1) snip([for (i=[0:k]) each i==k ? [p[k]] : let(l=norm(p[i+1]-p[i])) l<=ds ? [p[i]] : bridge(p[i], p[i+1], ds)], loop?1:0);
 
 // simplify a path by shifting points until each segment length is at least ds
 function coarse(path, ds=1, loop=true) = let(p=close_loop(path, enable=loop)) [for (t=quanta(floor(path_length(p)/ds), end=loop?0.9999:1)) path_lookup(p, t)];
 
 // simplify a path by combining colinear segments, f=colinearity (max is 10)
-function lean(path, f=1, loop, i=0, k) = let(k=ifundef(k, len(path)), loop=ifundef(loop, loopish(path))) i==k ? loop ? [] : [path[k-1]] : let(p=path[i], u=p-path[(i+k-1)%k], v=path[(i+1)%k]-p) concat(colinear(u, v, 1-0.0006*f) && (loop || i>0) ? [] : [p], lean(path, f, loop, i+1, k));
+function lean(path, f=1, loop, i=0, k) = let(k=ifundef(k, len(path)), loop=(loop!=undef?loop:loopish(path))) i==k ? loop ? [] : [path[k-1]] : let(p=path[i], u=p-path[(i+k-1)%k], v=path[(i+1)%k]-p) concat(colinear(u, v, 1-0.0006*f) && (loop || i>0) ? [] : [p], lean(path, f, loop, i+1, k));
 
 // preserving original shape as much as possible, generate one with vertices distrubuted more evenly, f=resolution
 function uniform(path, f=$fs, loop=true) = f==0 ? path : coarse(refine(path, ds=f/3, loop=loop), ds=f, loop=loop);
@@ -367,7 +367,7 @@ function radiate_at(path, i, r=1, loop=true) = let(w=nearby(path, i, r, loop)) a
 function tangent_at(path, i, r=1, loop=true) = let(w=nearby(path, i, r, loop)) avg([for (j=[0:r*2-1]) w[j+1]-w[j]]);
 
 // compute a normal vector at point i of path, r = sampling range
-function normal_at(path, i, r=1, loop=true, c) = let(v=path[i]-ifundef(c, centroid3d(path))) proj2(v, unit(tangent_at(path, i, r, loop)));
+function normal_at(path, i, r=1, loop=true, c) = let(v=path[i]-(c!=undef?c:centroid3d(path))) proj2(v, unit(tangent_at(path, i, r, loop)));
 
 // compute angle at vertex i of path
 function angle_at(path, i, loop=true) = let(w=force2d(nearby(path, i, 1, loop))) angle2d(w[2]-w[1], w[0]-w[1]);
@@ -402,9 +402,9 @@ function spline_control_points_arc(k, a, b, c, r, i=0) =
 
 // smooth an arc k by replacing each segment with a bezier curve, div = number of subdivisions
 function smooth_arc(k, div, n, i=0, p1, p2) = div&&div<=1 ? k : i==n-1 ? [k[i]] :
-  let(p1=ifundef(p1, spline_control_points_arc(k)))
-  let(p2=ifundef(p2, [for (i=incline(p1)) i==len(p1)-1 ? (k[i+1]+p1[i])/2 : 2*k[i+1]-p1[i+1]]))
-  let(d=ifundef(div, ceil(path_length([for (t=quanta(8, end=1)) bezier([k[i], p1[i], p2[i], k[i+1]], t)]))))
+  let(p1=(p1!=undef?p1:spline_control_points_arc(k)))
+  let(p2=(p2!=undef?p2:[for (i=incline(p1)) i==len(p1)-1 ? (k[i+1]+p1[i])/2 : 2*k[i+1]-p1[i+1]]))
+  let(d=(div!=undef?div:ceil(path_length([for (t=quanta(8, end=1)) bezier([k[i], p1[i], p2[i], k[i+1]], t)]))))
   concat([for (t=quanta(d)) bezier([k[i], p1[i], p2[i], k[i+1]], t)], smooth_arc(k, div, n, i+1, p1, p2));
 
 // --------------------------------------------
@@ -433,10 +433,10 @@ function spline_control_points_loop(k, w, n, sc, a, b, c, r, g, i) =
 
 // smooth a loop by replacing each segment with a bezier curve, div = number of subdivisions
 function smooth_loop(k, div, n, i=0, w, p1, p2) = div&&div<=1 ? k : i==n ? [] :
-  let(w=ifundef(w, [for (i=[0:n-1]) max(1, norm(k[i]-k[(i+1)%n]))]))
-  let(p1=ifundef(p1, spline_control_points_loop(k, w, n)))
-  let(p2=ifundef(p2, [for (i=[0:n-1]) let(j=(i+1)%n) k[j]*(1+w[i]/w[j]) - p1[j]*w[i]/w[j]]))
-  let(d=ifundef(div, round(path_length([for (t=quanta(8, end=1)) bezier([k[i], p1[i], p2[i], k[(i+1)%n]], t)]))))
+  let(w=(w!=undef?w:[for (i=[0:n-1]) max(1, norm(k[i]-k[(i+1)%n]))]))
+  let(p1=(p1!=undef?p1:spline_control_points_loop(k, w, n)))
+  let(p2=(p2!=undef?p2:[for (i=[0:n-1]) let(j=(i+1)%n) k[j]*(1+w[i]/w[j]) - p1[j]*w[i]/w[j]]))
+  let(d=(div!=undef?div:round(path_length([for (t=quanta(8, end=1)) bezier([k[i], p1[i], p2[i], k[(i+1)%n]], t)]))))
   concat([for (t=quanta(d)) bezier([k[i], p1[i], p2[i], k[(i+1)%n]], t)], smooth_loop(k, div, n, i+1, w, p1, p2));
 
 // compute control points for smooth_loop() - for debug only
@@ -511,7 +511,7 @@ function flush2d(points, xsign, ysign, origin=[0,0]) = let(xx=minmax(slice(point
 function centroid2d(points) = avg(points);
 
 // among many points, find the index of one closest to c (if c is undefined, find the one closest to centroid)
-function near2d(points, c) = let(c=ifundef(c, avg(points))) key_min([for (p=points) norm(p-c)]);
+function near2d(points, c) = let(c=(c!=undef?c:avg(points))) key_min([for (p=points) norm(p-c)]);
 
 // center 2D points
 function center2d(points, at=[0,0], enable=true) = is_list(points) && enable ? let(c=[for (i=[0:1]) avg(minmax(slice(points, i)))]-at) [for (p=points) p-c] : points;
@@ -801,9 +801,9 @@ function peanut_path(p1, p2, w=10, f=1.2) = let(m=(p1+p2)/2, e=p2-p1, h=norm(e),
 // ====================================================================
 
 function ruler_path(p1, p2, n) = let(d=p2-p1) [for (t=quanta(n?n:ceil(norm(d)/$fs), end=1)) p1+t*d]; // 2D also works
-function exp_path(p1, p2, n, r=2, v) = r==0 ? [p1,p2] : r==1 ? ruler_path(p1, p2, n) : let(v=ifundef(v, (p2-p1)*(1-r)/(1-pow(r,n)))) n==0 ? [p1] : let(p=p2-pow(r,n-1)*v) concat(exp_path(p1, p, n-1, r, v), [p2]); // divide into n segments of exponential ratios
+function exp_path(p1, p2, n, r=2, v) = r==0 ? [p1,p2] : r==1 ? ruler_path(p1, p2, n) : let(v=(v!=undef?v:(p2-p1)*(1-r)/(1-pow(r,n)))) n==0 ? [p1] : let(p=p2-pow(r,n-1)*v) concat(exp_path(p1, p, n-1, r, v), [p2]); // divide into n segments of exponential ratios
 function bush_path(p1, p2, f=3, end=1) = let(dx=p2[0]-p1[0], dy=p2[1]-p1[1], dz=p2[2]-p1[2]) [for (t=quanta(norm(p1-p2)/$fs, end=end)) let(s=poly_ease(t,f)) p1+[dx*s,dy*s,dz*t]];
-function vault_path(p1, p2, n, loop=false) = let(q1=p1[2]<p2[2]?p1:p2, q2=p1[2]<p2[2]?p2:p1, m=q1+[0,0,q2[2]-q1[2]]) concat([for (t=quanta(ceil(ifundef(n, norm(p2-p1)/$fs/2)), end=1)) bezier([p1,m,m,p2], t)], loop?[m]:[]);
+function vault_path(p1, p2, n, loop=false) = let(q1=p1[2]<p2[2]?p1:p2, q2=p1[2]<p2[2]?p2:p1, m=q1+[0,0,q2[2]-q1[2]]) concat([for (t=quanta(ceil(n!=undef?n:norm(p2-p1)/$fs/2), end=1)) bezier([p1,m,m,p2], t)], loop?[m]:[]);
 function helix_path(p1, p2, d=3, pitch=1) = pitch==0 ? [] : let(v=p2-p1, r=d/2, n=norm(v), m=m3_rotate(v)) [for (t=quanta(ceil(PI*r*n/pitch/$fs), end=1)) let(a=360*t*n/pitch) p1+[cos(a)*r,sin(a)*r,n*t]*m];
 
 // ====================================================================
@@ -989,7 +989,7 @@ function m3_revolve(a, n) = let(u=n/norm(n)) m3_ident(cos(a)) + m3_xprod(u)*sin(
 function m3_spin(a) = [[cos(a),sin(a),0],[-sin(a),cos(a),0],[0,0,1]]; // around z-axis
 function m3_negate(b) = let(b=ifundef(b, [0,0,1]), f=orth(b), v=cross(f, b)) m3_rotate(v, f, b)*m3_rotate(-f, v, b);
 function m3_rotate(v, from=[0,0,1], basis) = let(s=colinear(v, from)) s<0 ? m3_ident(s) :
-let(c=ifundef(basis, cross(from, v)), q=append(c, from*v), r=unit(override(q, 3, q[3]+norm(q)))) [
+let(c=(basis!=undef?basis:cross(from, v)), q=append(c, from*v), r=unit(override(q, 3, q[3]+norm(q)))) [
   [1-2*r[1]*r[1]-2*r[2]*r[2],   2*r[0]*r[1]+2*r[2]*r[3],   2*r[0]*r[2]-2*r[1]*r[3]],
   [  2*r[0]*r[1]-2*r[2]*r[3], 1-2*r[0]*r[0]-2*r[2]*r[2],   2*r[1]*r[2]+2*r[0]*r[3]],
   [  2*r[0]*r[2]+2*r[1]*r[3],   2*r[1]*r[2]-2*r[0]*r[3], 1-2*r[0]*r[0]-2*r[1]*r[1]]];
@@ -1004,7 +1004,7 @@ function m4_roll(a) = [[1,0,0,0], [0,cos(a),sin(a),0], [0,-sin(a),cos(a),0], [0,
 function m4_pitch(a) = [[cos(a),0,-sin(a),0], [0,1,0,0], [sin(a),0,cos(a),0], [0,0,0,1]]; // around y-axis
 function m4_spin(a) = [[cos(a),sin(a),0,0], [-sin(a),cos(a),0,0], [0,0,1,0], [0,0,0,1]]; // around z-axis
 function m4_rotate(v, from=[0,0,1], basis) = let(s=colinear(v, from)) s!=0 ? mm_ident(s) :
-  let(c=ifundef(basis, cross(from, v)), q=append(c, from*v), r=unit(override(q, 3, q[3]+norm(q)))) [
+  let(c=(basis!=undef?basis:cross(from, v)), q=append(c, from*v), r=unit(override(q, 3, q[3]+norm(q)))) [
   [1-2*r[1]*r[1]-2*r[2]*r[2],   2*r[0]*r[1]+2*r[2]*r[3],   2*r[0]*r[2]-2*r[1]*r[3], 0],
   [  2*r[0]*r[1]-2*r[2]*r[3], 1-2*r[0]*r[0]-2*r[2]*r[2],   2*r[1]*r[2]+2*r[0]*r[3], 0],
   [  2*r[0]*r[2]+2*r[1]*r[3],   2*r[1]*r[2]-2*r[0]*r[3], 1-2*r[0]*r[0]-2*r[1]*r[1], 0],
@@ -1034,7 +1034,7 @@ function mm_spin(a) = [[cos(a),-sin(a),0,0], [sin(a),cos(a),0,0], [0,0,1,0], [0,
 function mm_negate(b) = let(b=ifundef(b, [0,0,1]), f=orth(b), v=cross(f, b)) mm_rotate(v, f, b)*mm_rotate(-f, v, b);
 function mm_reframe(x, y, z) = [[x[0],y[0],z[0],0], [x[1],y[1],z[1], 0], [x[2],y[2],z[2],0], [0,0,0,1]]; // map to axes
 function mm_rotate(v, from=[0,0,1], basis) = let(s=colinear(v, from)) s!=0 ? mm_ident(s) :
-  let(c=ifundef(basis, cross(from, v)), q=append(c, from*v), r=unit(override(q, 3, q[3]+norm(q)))) [
+  let(c=(basis!=undef?basis:cross(from, v)), q=append(c, from*v), r=unit(override(q, 3, q[3]+norm(q)))) [
   [1-2*r[1]*r[1]-2*r[2]*r[2],   2*r[0]*r[1]-2*r[2]*r[3],   2*r[0]*r[2]+2*r[1]*r[3], 0],
   [  2*r[0]*r[1]+2*r[2]*r[3], 1-2*r[0]*r[0]-2*r[2]*r[2],   2*r[1]*r[2]-2*r[0]*r[3], 0],
   [  2*r[0]*r[2]-2*r[1]*r[3],   2*r[1]*r[2]+2*r[0]*r[3], 1-2*r[0]*r[0]-2*r[1]*r[1], 0],
@@ -1061,7 +1061,7 @@ function q_ident() = [1,0,0,0];
 function q_revolve(a, n=[0,0,1]) = let(a2=a/2, n=unit(redim(n, 3))) prepend(n*sin(a2), cos(a2));
 
 // quaternion that maps u to v, with optional n, the axis of rotation when u and v are antiparallel (if n is undefined, an arbitrary axis is picked which may be fine for a single vector but could cause discontinuity in a coherent set)
-function q_map(u, v, n) = let(c=colinear(u, v)) c>0 ? q_ident() : c<0 ? let(n=ifundef(n, orth(u))) prepend(unit(n), 0) : let(w=cross(u, v), q=prepend(w, u*v)) unit(plus(q, 0, norm(q)));
+function q_map(u, v, n) = let(c=colinear(u, v)) c>0 ? q_ident() : c<0 ? let(n=(n!=undef?n:orth(u))) prepend(unit(n), 0) : let(w=cross(u, v), q=prepend(w, u*v)) unit(plus(q, 0, norm(q)));
 
 // rotate one point
 function q_rotate(point, q) = let(r=[0,point[0],point[1],point[2]], s=q_mult(q_mult(q, r), q_conj(q))) [s[1],s[2],s[3]];
@@ -1098,7 +1098,7 @@ function morph(p1, p2, t, f=1) = p1==p2 && f==1 ? p1 : [for (i=[0:len(p1)-1]) le
 // scaler=optional scaling function [[a,b],...] where a=scaling factor, b=proportion in [0,1)
 // result is a set of layers ready for layered_block()
 function morph_between(p1, p2, h, scaler, n, s=0, z=0, end=1, curved=true) = 
-let(n=ifundef(n, max(len(p1), len(p2))), q1=cyclic(resample(p1, n), s), q2=resample(p2, n))
+  let(n=(n!=undef?n:max(len(p1),len(p2))), q1=cyclic(resample(p1, n), s), q2=resample(p2, n))
   scaler==undef ?
   [for (t=quanta(ceil(abs(h)/2/$fs), end=end)) ascend3d(morph(q1, q2, t, curved?t:1), t*h+z)] :
   [for (g=scaler) ascend3d(morph(q1, q2, g[1])*g[0], g[1]*h+z)];
@@ -1106,7 +1106,7 @@ let(n=ifundef(n, max(len(p1), len(p2))), q1=cyclic(resample(p1, n), s), q2=resam
 // interpolate layers by morphing along a series of profiles (2D or 3D) vertically with given intervals
 // result is a set of layers ready for layered_block()
 function morph_multiple(profiles, intervals, n, curved=false, z=0, i=0) =
-let(n=ifundef(n, max([for (p=profiles) len(p)])))
+  let(n=(n!=undef?n:max([for (p=profiles) len(p)])))
   i == len(profiles)-1 ? [ascend3d(resample(last(profiles), n), z)] : concat(
     morph_between(profiles[i], profiles[i+1], intervals[i], n=n, z=z, end=0.999, curved=opt(curved, i)),
     morph_multiple(profiles, intervals, n, curved, z+ifundef(intervals[i],0), i+1)
@@ -1191,7 +1191,7 @@ module grid2d(w, d, s=10, t=1, center=true) {
 // 2D negative area of a random voronoi: d=diameter, t=line thickness, r=rounding, f=zoom factor
 // a 2D child, if provided, will clip its boundry
 module voronoi(d, t=1, r=1, f=0.6, seed) {
-  seed=ifundef(seed, ceil(rands(0, 10000, 1)[0]));
+  seed=(seed!=undef?seed:ceil(rands(0, 10000, 1)[0]));
   if ($debug) echo(seed=seed);
   n = ceil(pow(d, 1.5)/10);
   e = rands(-d*f, d*f, n*2, seed);
@@ -1253,7 +1253,7 @@ module vault(p1, p2, t=1, n) {
 
 // a pyramind from a profile, origin=center of offset if provided (defaults to profile center)
 module pyramind(profile, h=5, inset=3, scale=0, origin) {
-  c = ifundef(origin, box2dc(profile));
+  c = (origin!=undef?origin:box2dc(profile));
   p = origin ? shift2d(profile, c) : profile;
   if (scale!=0)
     translate(c) deepen(h, scale=scale) polygon(shift2d(profile, -c));
@@ -1529,7 +1529,7 @@ module label(txt, p=[0,0,0], xsize=0, ysize=0, h=1, inflate=0, center=false, dir
 // a text-displaying signboard, ysize is auto if zero, d=text depth, passes $dm=[x,y,h,d,r,margin] to children
 module signboard(txt, xsize=50, ysize=0, h=3, d=1, inflate=0.1, center=true, dir="ltr", font="Hiragino Maru Gothic ProN", r, margin) {
   k = len(txt);
-  m = ifundef(margin, k==0 ? 0 : k<3 ? xsize/5 : xsize/(k*2));
+  m = margin!=undef ? margin : (k==0 ? 0 : k<3 ? xsize/5 : xsize/(k*2));
   x = xsize>0 ? max(0, xsize-m*2) : 50;
   y = ysize>0 ? max(0, ysize) : k<2 ? xsize : x*2/(k+1) + m*2;
   r = ifundef(r, y/10);
@@ -1543,8 +1543,8 @@ module signboard(txt, xsize=50, ysize=0, h=3, d=1, inflate=0.1, center=true, dir
 
 module icosasphere(d, n=1, v, f) {
   function vsub(a, b, c, r) = let(d=(a+b)/2, e=(b+c)/2, f=(c+a)/2) [a, b, c, r*d/norm(d), r*e/norm(e), r*f/norm(f)];
-  v = ifundef(v, icosa(d));
-  f = ifundef(f, icosa_faces());
+  v = (v!=undef?v:icosa(d));
+  f = (f!=undef?f:icosa_faces());
   if (n == 0) polyhedron(v, f, convexity=10);
   else {
     vv = [for (t=f) each vsub(v[t[0]], v[t[1]], v[t[2]], d/2)];
@@ -1555,8 +1555,8 @@ module icosasphere(d, n=1, v, f) {
 }
 
 module icosabouquet(d, n=1, v, f) {
-  v = ifundef(v, icosa(d));
-  f = ifundef(f, icosa_faces());
+  v = (v!=undef?v:icosa(d));
+  f = (f!=undef?f:icosa_faces());
   if (n == 0) polyhedron(v, f, convexity=10);
   else {
     r = d/2;
@@ -1568,8 +1568,8 @@ module icosabouquet(d, n=1, v, f) {
 }
 
 module dodecasphere(d, n=1, v, f) {
-  v = ifundef(v, dodeca(d));
-  f = ifundef(f, dodeca_faces());
+  v = (v!=undef?v:dodeca(d));
+  f = (f!=undef?f:dodeca_faces());
   if (n == 0) polyhedron(v, f, convexity=10);
   else {
     r = d/2;
@@ -1581,8 +1581,8 @@ module dodecasphere(d, n=1, v, f) {
 }
 
 module dodecabouquet(d, n=1, v, f) {
-  v = ifundef(v, dodeca(d));
-  f = ifundef(f, dodeca_faces());
+  v = (v!=undef?v:dodeca(d));
+  f = (f!=undef?f:dodeca_faces());
   if (n == 0) polyhedron(v, f, convexity=10);
   else {
     r = d/2;
@@ -2019,7 +2019,7 @@ module case_extrude(profile, h=30, b=24, t=2.8, j=4, g=0.1, bin=true, lid=true, 
 
 // extrude a profile with a rounded top, h=height, inset=amount to shrink, b=height of vertical base
 module cookie(profile, h=5, inset, b=0) {
-  s = ifundef(inset, abs(h));
+  s = (inset!=undef?inset:abs(h));
   b = min(abs(h), abs(b));
   r = max(0, abs(h)-b) * sign(h);
   m = s==0 ? [profile] : [for (c=round_path(r, s, a=[90,0])) force3d(reverse(offset2d(profile, c[1]-s), h<0), c[0])];
@@ -2197,7 +2197,7 @@ module random_spin(seed) {
 
 // scatter children evenly along a guiding path, e.g. [[-10,0,0],[10,0,0]]
 module spread(path) {
-  path = ifundef(path, ring_path(100));
+  path = (path!=undef?path:ring_path(100));
   for (i=[0:$children-1]) translate(path_lookup(path, i/$children)) children(i);
 }
 
@@ -2233,7 +2233,7 @@ module ulam_scatter(xy) {
 module path_scatter(path, n, loop=false, k, i=0, c=0, nc, a, m, t) {
   k = ifundef(k, len(path));
   if (i<k) {
-    a = ifundef(a, mm_pitch(-sweep_twist(path, loop, k)));
+    a = (a!=undef?a:mm_pitch(-sweep_twist(path, loop, k)));
     n = ifundef(n, $children==1 ? k : $children);
     nc = ifundef(nc, $children);
     tt = sweep_tangent(path, loop, k, i);
@@ -2338,7 +2338,7 @@ module orient_clone(points, from=[0,0,1]) {
 // clone a number of copies by applying a displacement d, an orientation to v, and a scaling s in each iteration
 module mm_clone(n, d=[10,0,0], v=[0,0,0], s=[1,1,1], mm) {
   if (n>0) {
-    mm = ifundef(mm, mm_ident());
+    mm = (mm!=undef?mm:mm_ident());
     multmatrix(mm) children();
     mm_clone(n-1, d, v, s, mm_scale(s) * mm_rotate(v) * mm_translate(d) * mm) children();
   }
@@ -2454,24 +2454,8 @@ module fillet_cube(dm, r=5, center=false) {
   }
 }
 
-// extrude an counterclockwise profile with configurable fillets at bottom (xz0) and top (xz1)
+// extrude a counterclockwise profile with configurable fillets at bottom (xz0) and top (xz1)
 // the default will round both top and bottom (set x in xz to zero for no fillet)
-//module fillet_extrude(profile, h=1.6, xz0=[-1,1], xz1=[-1,-1], r0, r1, r, convex=false, core=true) {
-//  if (h>0) {
-//    a0 = r0==undef ? r==undef ? abs(xz0[1]) : abs(r) : abs(r0);
-//    a1 = r1==undef ? r==undef ? abs(xz1[1]) : abs(r) : abs(r1);
-//    x0 = r0==undef ? r==undef ? xz0[0] : -r : -r0;
-//    x1 = r1==undef ? r==undef ? xz1[0] : -r : -r1;
-//    z0 = a0==0 && x0==0 ? 0 : min(h*a0/(a0+a1)-0.01, a0);
-//    z1 = a1==0 && x1==0 ? 0 : min(h*a1/(a0+a1)-0.01, a1);
-//    c0 = [for(i=fillet_path(x0, z0, convex, false)) force3d(offset2d(profile, i[0]), i[1])];
-//    c1 = [for(i=fillet_path(x1, -z1, convex, false)) force3d(offset2d(profile, i[0]), i[1]+h)];
-//    nf = x0>0 && x1>0;
-//    cc = nf ? profile : x0<x1 ? c0[0] : c1[0];
-//    m =concat([if (nf||x0>x1) force3d(cc, 0)], c0, reverse(c1), [if (nf||x0<x1) force3d(cc, h)]);
-//    layered_block(m, !core);
-//  }
-//}
 module fillet_extrude(profile, h=1.6, xz0=[-1,1], xz1=[-1,-1], r0, r1, r, convex=false, core=true) {
   if (h>0) {
     a0 = r0==undef ? r==undef ? abs(xz0[1]) : abs(r) : abs(r0);
@@ -2629,7 +2613,7 @@ module weld(r=3, n) {
   $fn = $fn ? $fn : $preview ? 16 : 0; // preview in low resolution if $fn not set
   children();
   if (r>0) for (i=[0:$children-1], j=[0:$children-1]) if (i<j) {
-    _merge(r, ifundef(n, ceil(_fn(r)/4))) {
+    _merge(r, (n!=undef?n:ceil(_fn(r)/4))) {
       children(i);
       children(j);
       render() intersection() {
@@ -2665,7 +2649,7 @@ module morph_dome(p1, p2, h, guide, s=0, inner=2) {
   q1 = cyclic(resample(p1, n), s);
   q2 = resample(p2, n);
   hi = h - inner/2;
-  guide = ifundef(guide, round_path(h, a=[0,90])/h);
+  guide = (guide!=undef?guide:round_path(h, a=[0,90])/h);
   layered_block(concat(
         [for (g=reverse(guide)) force3d(offset2d(morph(q1, q2, g[1])*g[0], -inner), g[1]*hi)],
         [for (g=guide) force3d(morph(q1, q2, g[1])*g[0], g[1]*h)]
@@ -2679,7 +2663,7 @@ module morph_tray(p1, p2, h, guide, s=0, inner=0.9) {
   q1 = cyclic(resample(p1, n), s);
   q2 = resample(p2, n);
   hi = h - inner;
-  guide = ifundef(guide, [for (t=quanta(_fn(h), end=1)) [1,t]]);
+  guide = (guide!=undef?guide:[for (t=quanta(_fn(h), end=1)) [1,t]]);
   layered_block(concat(
         [for (g=(guide)) force3d(morph(q1, q2, g[1])*g[0], g[1]*h)],
         [for (g=reverse(guide)) force3d(offset2d(morph(q1, q2, g[1])*g[0], -inner), g[1]*hi+inner)]
@@ -2688,15 +2672,15 @@ module morph_tray(p1, p2, h, guide, s=0, inner=0.9) {
 
 // extrude a vase morphing from p1 to p2, with height h and cyclic adjustment s
 // guide is a 2D curve of control points, with each coordinate within the [0,1] range
-module morph_vase(p1, p2, h, guide, s=0, inner=2) {
+module morph_vase(p1, p2, h, guide, s=0, inner=2, tidy=0) {
   n = max(len(p1), len(p2));
   q1 = cyclic(resample(p1, n), s);
   q2 = resample(p2, n)*0.7;
   hi = h - inner/2;
-  guide = ifundef(guide, subarray(round_path(h, a=[90,0]), 1)/h);
+  guide = (guide!=undef?guide:subarray(round_path(h, a=[90,0]), 1)/h);
   layered_block(concat(
         [for (g=snip(reverse(guide))) force3d(morph(q1, q2, g[1])*(1.5-g[0]), g[1]*h)],
-        [for (g=guide) force3d(offset2d(morph(q1, q2, g[1])*(1.5-g[0]), -inner), g[1]*hi+inner)]
+        [for (g=guide) force3d(offset2d(morph(q1, q2, g[1])*(1.5-g[0]), -inner, tidy=tidy), g[1]*hi+inner)]
         ));
 }
 
@@ -2706,7 +2690,7 @@ module morph_case(p1, p2, h, guide, cut=0.5, s=0, j=5, inner=0.95, visible=true)
   n = max(len(p1), len(p2));
   q1 = cyclic(resample(p1, n), s);
   q2 = resample(p2, n);
-  guide = ifundef(guide, shift2d(concat([for (t=quanta(20)) [1,-0.5*(1-t)]], scale2d(round_path(h, a=[0,90])/h, 1, 0.5)), [0,0.5]));
+  guide = (guide!=undef?guide:shift2d(concat([for (t=quanta(20)) [1,-0.5*(1-t)]], scale2d(round_path(h, a=[0,90])/h, 1, 0.5)), [0,0.5]));
   gap = 0.4/h;
   w = box2dw(p1)+5;
 
