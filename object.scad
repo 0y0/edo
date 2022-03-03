@@ -168,3 +168,94 @@ module cover_case(profile, h=25, d=8, t=2.8, s=1.2, b=2, g=0.1, m=0, sp=0, view)
   }
 }
 
+// a rectangular case with hinge, dm=[width,length,height,lid_height], t=thickness, r=rounding, f=fillet, e=hinge_height
+// g=gap, view={undef:print 0:cross-section, 1:bin, 2:lid, 3:closed}
+module hinge_case(dm, t=3, r=0, f=0, e=0, g=0, view) {
+  if (view==undef) {
+    scatter(x=dm[0]+10) {
+      hinge_bin(dm, t, r, f, e, g);
+      flipy(h=dm[2]+t*2) hinge_lid(dm, t, r, f, e);
+    }
+  }
+  else child(view) {
+    // cross-section
+    clip([dm[0]+t*3,dm[1]+t*3,dm[2]+t*3], cy=0) {
+      color("wheat") hinge_bin(dm, t, r, f, e, g);
+      color("pink") hinge_lid(dm, t, r, f, e);
+    }
+    // bin
+    hinge_bin(dm, t, r, f, e, g);
+    // lid
+    flipy(h=dm[2]+t*2) hinge_lid(dm, t, r, f, e);
+    // closed
+    union() {
+      color("wheat") hinge_bin(dm, t, r, f, e, g);
+      color("pink") hinge_lid(dm, t, r, f, e);
+    }    
+  }
+}
+
+// a rectangular bin, dm=[width,length,height,lid_height], t=thickness, r=rounding, f=fillet, e=hinge_height, g=gap
+module hinge_bin(dm, t=3, r=0, f=0, e=0, g=0) {
+  rr = min(dm[0]/2+t-0.05, dm[1]/3, max(t+0.1,r));
+  lh = ifundef(dm[3], 2);
+  c = offset2d(pad_path(dm[0]+t*2, dm[1]+t*2, rr), -t, tidy=0);
+  p = [dm[0]/2,0,dm[2]-lh+t];
+  s1 = dm[1]*0.4+0.15;
+  s2 = t+max(0,e);
+  difference() {
+    union() {
+      fillet_tray(c, dm[2]-lh+t, t, r=min(lh+t-4,f));
+      ascend(dm[2]-lh+t-0.21) wall(c, 1.01, 1.5-0.2, flat=false, $fs=$fs/2); // rim
+    }
+    translate(p+[-t/2+t,0,-s2+t/2]) {
+      ascend(s2/2) cube([t+3,s1+g*2,s2+2.2], center=true);
+      rotate([90,-90,0]) spin(-5) {
+        solid(arch_path(t+0.3, $fn=32), s1+g*2, bottom=-s1/2-g);
+        slide(y=-t-0.29) cube([t+0.3,t+0.3,s1+g*2], center=true);
+      }
+      y_clone([0,-s1/2,-0.1]) {
+        sphere(d=1.72, $fn=32);
+        beam([0,0,0.2], [-3,0,1.2], 0.8, $fn=32);
+      }
+    }
+    translate([0.3-p[0],0,p[2]-1.7]) sphere(d=1.6, $fn=32); // dimple
+    translate([-p[0]-t-9.8,0,p[2]]) rotate([0,25,0]) cylinder(d=20, 5); // thumb notch
+  }
+}
+
+// a rectangular lid, dm=[width,length,height,lid_height], t=thickness, r=rounding, f=fillet, e=hinge_height
+module hinge_lid(dm, t=3, r=0, f=0, e=0) {
+  rr = min(dm[0]/2+t-0.05, dm[1]/3, max(t+0.1,r));
+  lh = ifundef(dm[3], 2);
+  ff = min(lh+t-4,f);
+  c = offset2d(pad_path(dm[0]+t*2, dm[1]+t*2, rr), -t, tidy=0);
+  p = [dm[0]/2,0,dm[2]-lh+t];
+  s1 = dm[1]*0.4+0.15;
+  s2 = t+max(0,e);
+  g = dm[1]/2+t-rr-0.2;
+  q = s2-t/2;
+  difference() {
+    flipx(h=dm[2]+t*2) fillet_tray(c, lh+t-0.1, t, r=ff);
+    beam(p+[-t/2+t-0.01,-g,-q], p+[-t/2+t-0.01,g,-q], 2*norm([t/2,q])-0.05);
+    ascend(dm[2]-lh+t-0.21) wall(offset2d(c, 1.5, tidy=0), 1.2, -1.5-0.1, flat=true); // rim space
+  }
+  // hinge
+  translate([p[0]-t+t+0.01,0,dm[2]+t+0.01]) fillet_bar(s1, [-2,-2]);
+  translate(p+[-t/2+t,0,-s2+t/2]) {
+    rotate([90,180,0]) solid(arch_path(t, $fn=32), s1, bottom=-s1/2);
+    ascend(t/2-0.01) slab([t,s1,e+lh+t-max(t,ff)]);
+    y_clone([0,s1/2,0]) sphere(d=1.7, $fn=32);
+  }
+  // bulge
+  translate(p+[-dm[0]-t*1.3,0,0.1]) intersection() {
+    translate([t+t/2,0,0]) scale([0.7,1,0.6]) dome(t*4);
+    translate([t/4-t,0,0]) cube(t*3, center=true);
+  }
+  // strut
+  translate([0.4-p[0],0,p[2]-1.6]) sphere(d=1.5, $fn=32);
+  translate([0.2-p[0],0,p[2]-0.1]) rotate([90,180,90]) solid(arch_path(5), 1.3);
+  translate([-dm[0]/2-0.1,-2.5,p[2]+1]) cube([1.3+0.3,5,lh-0.9]);
+  translate([1.49-p[0],0,p[2]+lh+0.01]) fillet_bar(5, [3,-3]);
+}
+

@@ -2514,13 +2514,15 @@ module fillet_lid(profile, h=5, t=1.6, e=3, g=0.1, top=true, flip=false, tidy) {
 // create a bin from a profile with rounded bottom, where h=inner height, t=wall thickness (may be negative)
 // children are added relative to the bottom inside the bin
 module fillet_bin(profile, h=20, t=1.6, bottom=true, flat=true, tidy) {
-  tt = abs(t);
-  td = t>0 && convex2d(profile) ? 0 : tidy;
-  m1 = [for (i=arc_path(tt*2, [-90,0])) force3d(offset2d(profile, i[0]-(t<0?tt:0), tidy=td), tt+i[1])];
-  m2 = flat ? [force3d(last(m1), h+tt), force3d(m1[0], h+tt)] :
-    [for (i=arc_path(tt, [0,180])) force3d(offset2d(profile, i[0]+t/2, tidy=td), h+tt/2+i[1])];
-  layered_block(concat(m1, m2, [force3d(m1[0], tt)]), loop=!bottom);
-  if (bottom) ascend(tt-0.01) children(); // allow union
+  if (t!=0 && h!=0) {
+    tt = abs(t);
+    td = t>0 && convex2d(profile) ? 0 : tidy;
+    m1 = [for (i=arc_path(tt*2, [-90,0])) force3d(offset2d(profile, i[0]-(t<0?tt:0), tidy=td), tt+i[1])];
+    m2 = flat ? [force3d(last(m1), h+tt), force3d(m1[0], h+tt)] :
+      [for (i=arc_path(tt, [0,180])) force3d(offset2d(profile, i[0]+t/2, tidy=td), h+tt/2+i[1])];
+    layered_block(concat(m1, m2, [force3d(m1[0], tt)]), loop=!bottom);
+    ascend(bottom?tt-0.01:0) children(); // allow union
+  }
 }
 
 // create a tray of height h from a profile with rounded bottom r, negative thickness t means inner wall
@@ -2535,6 +2537,7 @@ module fillet_tray(profile, h=20, t=1.6, r, bottom=true, flat=true) {
       flat ? [-tt,0] : ccw_path([tt,0], [0,0], po=[tt/2,0]),
       if (rr<hh-0.01) [0,-hh+rr], cw_path([rr-tt,0], [0,tt-rr], po=[0,0])], [t<0?-rr:tt-rr,0]);
     layered_block([for (i=g) force3d(offset2d(profile, i[0]), i[1])], loop=!bottom);
+    ascend(bottom?tt-0.01:0) children(); // allow union
   }
 }
 
