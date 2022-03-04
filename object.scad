@@ -197,7 +197,7 @@ module hinge_case(dm, t=3, r=0, f=0, e=0, g=0, view) {
 
 // a rectangular bin, dm=[width,length,height,lid_height], t=thickness, r=rounding, f=fillet, e=hinge_height, g=gap
 module hinge_bin(dm, t=3, r=0, f=0, e=0, g=0) {
-  rr = min(dm[0]/2+t-0.05, dm[1]/3, max(t+0.1,r));
+  rr = min(dm[0]/2+t-0.05, dm[1]/3, t+max(0.1,r));
   lh = ifundef(dm[3], 2);
   c = offset2d(pad_path(dm[0]+t*2, dm[1]+t*2, rr), -t, tidy=0);
   p = [dm[0]/2,0,dm[2]-lh+t];
@@ -226,7 +226,7 @@ module hinge_bin(dm, t=3, r=0, f=0, e=0, g=0) {
 
 // a rectangular lid, dm=[width,length,height,lid_height], t=thickness, r=rounding, f=fillet, e=hinge_height
 module hinge_lid(dm, t=3, r=0, f=0, e=0) {
-  rr = min(dm[0]/2+t-0.05, dm[1]/3, max(t+0.1,r));
+  rr = min(dm[0]/2+t-0.05, dm[1]/3, t+max(0.1,r));
   lh = ifundef(dm[3], 2);
   ff = min(lh+t-4,f);
   c = offset2d(pad_path(dm[0]+t*2, dm[1]+t*2, rr), -t, tidy=0);
