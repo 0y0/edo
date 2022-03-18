@@ -254,7 +254,7 @@ function sum(array, i) = i==undef ? sum(array, len(array)-1) : i>0 ? array[i] + 
 function avg(array, i) = i==undef ? avg(array, len(array)-1) : i>0 ? (array[i] + i*avg(array, i-1))/(i+1) : array[0];
 
 // compute accumulated sums
-function accum(array, i=0, s=0) = i==len(array) ? [] : let(ss=s+array[i]) concat([ss], accum(array, i+1, ss));
+function accum(array, i=0, s=0) = i==len(array) ? [s] : concat([s], accum(array, i+1, s+array[i]));
 
 // return min and max
 function minmax(array) = [min(array),max(array)];
@@ -1117,6 +1117,9 @@ function morph_cookie(profile, h, b=0, origin=[0,0], f=0) =
   let(p=shift2d(profile, -origin), n=ceil(perimeter(avg(size2d(profile))/4, h-b)/4/$fs))
   let(m=[for (t=quanta(n, end=1, max=90+f)) force3d(shift2d(p*cos(t-f), origin), b+(h-b)*sin(min(90,t)))])
   b<=0 ? m : prepend(m, force3d(shift2d(p, origin), 0));
+
+// smooth vertical morphing for a series of profiles spaced with given intervals, n=resolution, f=smoothness
+function morph_smooth(profiles, intervals, n=200, f=7) = let(h=accum(intervals), p=[for (i=indices(profiles)) force3d(resample(profiles[i], n), h[i])]) isomesh([for (q=isomesh(p)) smooth(q, f)]);
 
 // ====================================================================
 // 3D sweep functions - note that they return the layers in reverse order of path for correct surface norms
