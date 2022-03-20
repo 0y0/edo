@@ -193,7 +193,7 @@ function nearby(array, idx, r=1, loop=true) = let(k=len(array)) [for (i=[idx-r:i
 function split(array, n) = [let (k=len(array), m=ceil(k/n)) for (j=[0:n-1]) [for (i=[m*j:m*j+m-1]) if (i<k) array[i]]];
 
 // rotate array elements in a cyclic fashion (forward for positive n)
-function cyclic(array, n) = let(k=len(array)) [for (i=[n:n+k-1]) array[mod(i, k)]];
+function cyclic(array, n) = n==0 ? array : [let(k=len(array)) for (i=[n:n+k-1]) array[mod(i, k)]];
 
 // generate an array containing n copies of e
 function repeat(e, n=2) = [for (i=[1:n]) e];
@@ -348,8 +348,8 @@ function uniform(path, f=$fs, loop=true) = f==0 ? path : coarse(refine(path, ds=
 
 // soften a path by replacing each sharp corner with an arc of radius no greater than r
 function soften(path, r=5, loop=true, i=0, m, pp) = r==0 ? path :
-  let(p=i==0 && loop ? let(q=[(path[0]+path[len(path)-1])/2]) concat(q, path, q) : path)
-  let(m=ifundef(m, len(p)), pp=ifundef(pp, loop ? [] : [p[0]])) i==m-2 ? loop ? pp : concat(pp, [p[m-1]]) :
+  let(p=i==0 && loop ? concat([path[len(path)-1]], path, [path[0]]) : path)
+  let(m=ifundef(m, len(p)), pp=ifundef(pp, loop ? [] : [p[0]])) i==m-2 ? loop ? snip(pp, 1) : concat(pp, [p[m-1]]) :
   let(o=p[i+1], u=p[i]-o, v=p[i+2]-o, mu=norm(u), mv=norm(v), du=u/mu, dv=v/mv, c2=du*dv, t=sqrt((1-c2)/(1+c2)))
   let(a=min([mu/2,mv/2,r/t]), f=o+a*du, g=o+a*dv, c=o+norm([a,min([r,a*t])])*unit(du+dv), e=cross(u,v))
   soften(p, r, loop, i+1, m, concat(pp, abs(e)<1 || a<=0 || mu+mv<$fs ? [o] : e<0 ? ccw_path(f, g, po=c) : cw_path(f, g, po=c)));
@@ -377,7 +377,7 @@ function angle_at(path, i, loop=true) = let(w=force2d(nearby(path, i, 1, loop)))
 // ====================================================================
 
 // smooth a path by replacing each segment with a bezier curve, div = subdivisions (auto if omit)
-function smooth(path, div, loop) = path==undef ? undef : div!=undef&&div<2 ? path : let(n=len(path)) n<3 || n>200 ? echo(strc("smooth(): path invalid or too complex"), n=n) [] : loop || loop==undef && loopish(path) ? smooth_loop(path, div, n) : smooth_arc(path, div, n);
+function smooth(path, div, loop) = path==undef ? undef : div!=undef&&div<2 ? path : let(n=len(path)) n<3 ? path : n>200 ? echo(strc("smooth(): path too complex"), n=n) [] : loop || loop==undef && loopish(path) ? smooth_loop(path, div, n) : smooth_arc(path, div, n);
 
 // compute bezier curve using 4 points [begin, control1, control2, end], t in [0,1]
 function bezier(points, t) = [let(d=len(points[0])) for (i=[0:d-1]) [pow(1-t,3), 3*t*pow(1-t,2), 3*t*t*(1-t), pow(t,3)]*slice(points, i)];
@@ -559,6 +559,10 @@ function meet2d(s1, s2, virtual=false) = let(r=s1[1]-s1[0], s=s2[1]-s2[0], c=r &
 
 // find intersection of two line segments s1=[p0,p1] and s2=[p2,p3], excluding end points, e=tolerance
 function cut2d(s1, s2, e=0) = let(r=s1[1]-s1[0], s=s2[1]-s2[0], c=r && s ? cross(r, s) : 0) c==0 ? undef : let(d=s2[0]-s1[0], t=cross(d, s)/c, u=cross(d, r)/c) (t!=0 && t!=1 && u!=0 && u!=1 && t>-e && t<1+e && u>-e && u<1+e) ? s1[0]+t*r : undef;
+
+// preserving vertices, align the starting point of profile to where dimension d changes sign
+// note that a profile not changing sign in dimension d will fail
+function home2d(profile, d=1) = let(k=len(profile), j=[for (i=[k-1:-1:0]) let(q1=profile[i][d], q2=profile[(i+1)%k][d]) if (q1==0 || (q1<0 && q2>=0)) i][0]) cyclic(profile, abs(profile[j][d])>abs(profile[(j+1)%k][d])? (j+1)%k : j);
 
 // check if profile is strictly convex
 function convex2d(profile, f=0.001, i=0, k) = let(k=ifundef(k, len(profile))) i<k ? let(p0=profile[(i+k-1)%k], p1=profile[i], p2=profile[(i+1)%k]) convex2d(profile, f, i+1, k) && cross(unit(p2-p1), unit(p0-p1))>-f : true;
@@ -1119,7 +1123,7 @@ function morph_cookie(profile, h, b=0, origin=[0,0], f=0) =
   b<=0 ? m : prepend(m, force3d(shift2d(p, origin), 0));
 
 // smooth vertical morphing for a series of profiles spaced with given intervals, n=resolution, f=smoothness
-function morph_smooth(profiles, intervals, n=200, f=7) = let(h=accum(intervals), p=[for (i=indices(profiles)) force3d(resample(profiles[i], n), h[i])]) isomesh([for (q=isomesh(p)) smooth(q, f)]);
+function morph_smooth(profiles, intervals, n=200, f=7, d=1) = let(h=accum(intervals), p=[for (i=indices(profiles)) force3d(home2d(resample(profiles[i], n), d=d), h[i])]) isomesh([for (q=isomesh(p)) smooth(q, f, loop=false)]);
 
 // ====================================================================
 // 3D sweep functions - note that they return the layers in reverse order of path for correct surface norms
