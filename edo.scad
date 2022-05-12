@@ -602,6 +602,13 @@ function vnormal2d(path, idx, d=1) = let(g=len(path)) g<3 ? undef : let(
 // find intersection point(s) of 2 circles
 function circles_meet(c1, c2, r1, r2) = let(d=norm(c1-c2), a=(r1*r1-r2*r2+d*d)/(2*d), m=c1+a*(c2-c1)/d, s=sqrt(r1*r1-a*a)*orth2d(c2-c1)/d) [m+s,m-s];
 
+// find intersection point(s) on the surfaces of 3 spheres
+function trilaterate(c1, c2, c3, r1, r2, r3) =
+  let(v21=c2-c1, v31=c3-c1, ex=v21/norm(v21), d1=ex*v31, t=v31-d1*ex, ey=t/norm(t))
+  let(ez=cross(ex, ey), d2=ey*v31, n21=norm(c2-c1))
+  let(x=(r1*r1-r2*r2+n21*n21)/(2*n21), y=(r1*r1-r3*r3-2*d1*x+d1*d1+d2*d2)/(2*d2))
+  let(k=r1*r1-x*x-y*y) k<0 ? undef : let(z=sqrt(k)) [c1+x*ex+y*ey+z*ez,c1+x*ex+y*ey-z*ez];
+
 // return [origin, radius] of the circle passing through 3 points in 2D
 function circle3p(p1, p2, p3) = (p1==p2 || p2==p3 || p3==p1) ? undef :
   (p2[1]-p1[1])/(p2[0]-p1[0])==(p3[1]-p2[1])/(p3[0]-p2[0]) ? undef :
