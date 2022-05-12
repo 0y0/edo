@@ -152,6 +152,12 @@ function graph(fn, n=10, scaler=[1,1], close=false, reverse=false) = [let (s0=op
 // generate a new parametric function which is product of two parametric functions
 fxf = function(fn1, fn2) function(t) fn1(t)*fn2(t);
 
+// helper for setting a default viewpoint when file is opened, e.g.
+// $vpt = vp([0,0,0.5]);
+// $vpr = vp([55,0,-25]);
+// $vpd = vp(300); // $vpd should be changed last
+function vp(q) = $vpd==140 ? q : undef;
+
 // ====================================================================
 // array manipulations
 // ====================================================================
@@ -560,7 +566,7 @@ function meet2d(s1, s2, virtual=false) = let(r=s1[1]-s1[0], s=s2[1]-s2[0], c=r &
 // find intersection of two line segments s1=[p0,p1] and s2=[p2,p3], excluding end points, e=tolerance
 function cut2d(s1, s2, e=0) = let(r=s1[1]-s1[0], s=s2[1]-s2[0], c=r && s ? cross(r, s) : 0) c==0 ? undef : let(d=s2[0]-s1[0], t=cross(d, s)/c, u=cross(d, r)/c) (t!=0 && t!=1 && u!=0 && u!=1 && t>-e && t<1+e && u>-e && u<1+e) ? s1[0]+t*r : undef;
 
-// preserving vertices, align the starting point of profile to where dimension d changes sign
+// preserving vertices, align the starting point of profile to where dimension d changes sign (0=x, 1=y)
 // note that a profile not changing sign in dimension d will fail
 function home2d(profile, d=1) = let(k=len(profile), j=[for (i=[k-1:-1:0]) let(q1=profile[i][d], q2=profile[(i+1)%k][d]) if (q1==0 || (q1<0 && q2>=0)) i][0]) cyclic(profile, abs(profile[j][d])>abs(profile[(j+1)%k][d])? (j+1)%k : j);
 
@@ -1122,7 +1128,8 @@ function morph_cookie(profile, h, b=0, origin=[0,0], f=0) =
   let(m=[for (t=quanta(n, end=1, max=90+f)) force3d(shift2d(p*cos(t-f), origin), b+(h-b)*sin(min(90,t)))])
   b<=0 ? m : prepend(m, force3d(shift2d(p, origin), 0));
 
-// smooth vertical morphing for a series of profiles spaced with given intervals, n=resolution, f=smoothness
+// smooth vertical morphing for a series of profiles spaced with given intervals
+// n=resolution, f=smoothness, d=alignment_axis (see home2d)
 function morph_smooth(profiles, intervals, n=200, f=7, d=1) = let(h=accum(intervals), p=[for (i=indices(profiles)) force3d(home2d(resample(profiles[i], n), d=d), h[i])]) isomesh([for (q=isomesh(p)) smooth(q, f, loop=false)]);
 
 // ====================================================================
@@ -2140,8 +2147,13 @@ module layered_dome(layers, inner=0.8, skip=3) {
 }
 
 // plot layers
-module plot_layers(layers, d=0.2, loop=false, color, dup=false) {
-  for (l=layers) plot(l, d=d, loop=loop, color=l==layers[0]?"blue":color, dup=dup);
+module plot_layers(layers, intervals, d=0.2, loop=false, color, dup=false) {
+  if (intervals==undef)
+    for (l=layers) plot(l, d=d, loop=loop, color=l==layers[0]?"blue":color, dup=dup);
+  else {
+    c = [let(z=accum(intervals)) for (i=indices(layers)) force3d(layers[i], z[i])];
+    plot_layers(c, d=d, loop=true, color=color?color:"red");
+  }
 }
 
 // plot slopes
