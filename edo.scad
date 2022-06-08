@@ -1845,32 +1845,34 @@ module nut_thread(m=[3,5], pitch=0.5, h=[0,10], b=[0,0], gap=0.4, v=1, debug=fal
   b1 = max(0, is_list(b) ? b[1] : 0); // top non-threaded space
   bx = [b0>0 ? b0 : b0-pitch, b1>0 ? b1 : b1-pitch]; // fully open when b<=0
   difference() { // carve from children or a cylinder
-    if ($children) children(); else ascend(h0+0.01) cylinder(d=d1, h=hh-0.02, $fn=_fn(d0/2));
+    if ($children) children(); else ascend(h0) cylinder(d=d1, h=hh);
     highlight(debug) screw_thread(m=d0, pitch=pitch, h=[h0-0.01,h1+0.01], b=bx, gap=-gap, open=0, v=v);
   }
 }
 
-// thread on a bottle: d=neck_diameter, w=thread_dimensions, b=baseline, a=spin, n=count, cap=cap_mode, gap=spacing
+// thread on a bottle: d=neck_diameter, w=thread_dimensions, b=baseline, a=spin (for cap), n=count,
+// cap=cap_mode, gap=spacing, c=thread_lead
 // when n>1 and !cap, each thread bends down to provide a stop for the lug neck finish
-module bottle_thread(d, pitch=4, h=[0,10], w=[1.2,0.8], b=0, a=0, n=1, cap=false, gap=0) {
+module bottle_thread(d, pitch=4, h=[0,10], w=[1.2,0.8], b=0, a=0, n=1, cap=false, gap=0, c=3) {
   w0 = opt(w, 0);
   w1 = opt(w, 1);
   r = d/2 + (cap ? sqrt(2+(w0-w1)/w0)*w0+gap+0.1 : -gap-0.2);
   h0 = is_list(h) ? h[0] : 0;
   h1 = is_list(h) ? h[1] : h;
   hh = h1-h0;
-  k = hh/pitch; // how many rounds
-  g = [let(d=k*d*PI, a0=360*h0/pitch) for (t=quanta(ceil(d/$fs))) let(a=a0+t*k*360) [r*cos(a),r*sin(a),b+h0+hh*t-(cap||n==1?0:w1*3*max(0,1-d*t/6)^7)]];
-  radiate(n) spin(a) {
-    fillet_sweep(round_path(w0+0.2, w1, cap?[90,270]:[-90,90]), g, c1=2, twist=false);
+  zp = pitch==0; // zero pitch
+  k = zp ? 1 : hh/pitch; // how many rounds
+  g = zp ? ring_path(d) : [let(d=k*d*PI, a0=360*h0/pitch) for (t=quanta(ceil(d/$fs))) let(a=a0+t*k*360) [r*cos(a),r*sin(a),b+h0+hh*t-(cap||n==1?0:w1*3*max(0,1-d*t/6)^7)]];
+  radiate(n) spin(a) translate([0,0,pitch*a/360]) {
+    fillet_sweep(round_path(w0+0.2, w1, cap?[90,270]:[-90,90]), g, c0=zp?0:c, c1=zp?0:c, twist=false, loop=zp);
     if (!cap && n>1) let(e=g[len(g)-1]) orient(force2d(e)) slide(x=r+0.1) flipy(90, e[2]-w1*2-0.3) cookie_extrude(ring_path(w1*2), w0*0.8); // bump
   }
   children();
 }
 
 // thread on a cap (unlike nut_thread, not a negative space), to pair with bottle_thread()
-module cap_thread(d, pitch=4, h=[0,10], w=[1.2,0.8], b=0, a=0, n=1, gap=0) {
-  bottle_thread(d=d, pitch=pitch, h=h, w=w, b=b, a=a, n=n, cap=true, gap=gap) children();
+module cap_thread(d, pitch=4, h=[0,10], w=[1.2,0.8], b=0, a=0, n=1, gap=0, c=3) {
+  bottle_thread(d=d, pitch=pitch, h=h, w=w, b=b, a=a, n=n, cap=true, gap=gap, c=c) children();
 }
 
 // lug threads on a bottle: d=neck_diameter, w=thread_dimensions, b=baseline, a=spin, n=count, cap=cap_mode, gap=spacing
@@ -1895,14 +1897,27 @@ module nut_holes(locs=[[0,0,0]], m=3, pitch=0.5, h=5, gap=-0.4, e=[0,0,0]) {
   }
 }
 
-// socket for heatset inserts, h=height, d=outer diameter, m=screw diameter, w=insert outer diameter (3.5 for M2)
-module heatset_socket(d=8, h=3, m=3, w=4.2, fillet=2) {
+// an insert for a screw, m=screw_diameter, h=height, b=solid_range, pitch=screw_pitch, gap=extra_gap, xz=fillet_size
+module screw_prop(m=[3,5], h=[0,10], b=[0,0], pitch=0.5, gap=0.1, xz=[1,2]) {
+  m0 = is_list(m) ? m[0] : m;
+  m1 = is_list(m) ? m[1] : m+3;
+  h0 = is_list(h) ? h[0] : 0;
+  h1 = is_list(h) ? h[1] : h;
+  b0 = is_list(b) ? b[0] : b;
+  b1 = is_list(b) ? b[1] : 0;
+  hh = h1 - h0;
+  nut_thread(m, pitch=pitch, h=[h0+b0,h1-b1], b=[0,0], gap=gap)
+    ascend(h0) fillet_pipe(m1, h=hh, xz=xz, m=0);
+}
+
+// an insert for heatset nuts, d=outer_diameter, h=height, m=screw_diameter, w=inner_diameter (3.5 for M2, 4.2 for M3)
+module heatset_prop(d=8, h=3, m=3, w=4.2, fillet=2) {
   fillet_pipe(d=max(m+4, d), h=h, m=w-0.2, xz=[max(0,opt(fillet,0)),opt(fillet,1,3)]);
   if (h>3) pipe(d=w+2, h=h-3, m=m+0.2);
 }
 
-// socket for M4 x 1 magnet with slightly narrow rim
-module mag_socket(h=1.4, d=4.3) {
+// an insert for M4 x 1 magnet with slightly narrow rim
+module magnet_prop(h=1.4, d=4.3) {
   $fs=0.4;
   ascend(h<0?-0.01:-h+0.01) fillet_extrude(ring_path(d), h=abs(h), xz0=[h<0?-0.2:0,0.4], xz1=[h<0?0:-0.2,0.4]);
 }
@@ -2502,7 +2517,7 @@ module fillet_extrude(profile, h=1.6, xz0=[-1,1], xz1=[-1,-1], r0, r1, r, convex
 }
 
 // sweep profile along path with end caps defined by c0,c1=[r,e] where r=fillet radius, e=cap length (optional)
-module fillet_sweep(profile, path, c0, c1, s=0, twist=true) {
+module fillet_sweep(profile, path, c0, c1, s=0, twist=true, loop=false) {
   k = len(path);
   if (k>1) {
     rr = max([for (p=profile) norm(p)]);
@@ -2516,7 +2531,7 @@ module fillet_sweep(profile, path, c0, c1, s=0, twist=true) {
     v1 = [let(b=path[k-1], t=unit(path[k-1]-path[k-2])) for (s=s1) b+t*s];
     p = concat(v0, path, v1);
     g = [let(k=len(p), a0=len(v0), a1=len(v1)) for (i=[0:k-1]) let(t=i/k) i<a0 ? [1-(1-sin(90*i/a0))*r0/rr,t] : i>=k-a1 ? [1-(1-sin(90*(k-i-1)/a1))*r1/rr,t] : [1,t]];
-    layered_block(sweep_layers([for (i=g) profile*i[0]], force3d(p), s=s, twist=twist&&(s!=0||p[0][2]!=undef)));
+    layered_block(sweep_layers([for (i=g) profile*i[0]], force3d(p), s=s, twist=twist&&(s!=0||p[0][2]!=undef)), loop=loop);
   }
 }
 
