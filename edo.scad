@@ -1850,20 +1850,21 @@ module nut_thread(m=[3,5], pitch=0.5, h=[0,10], b=[0,0], gap=0.4, v=1, debug=fal
   }
 }
 
-// thread on a bottle: d=neck_diameter, w=thread_dimensions, b=baseline, a=spin (for cap), n=count,
+// thread on a bottle: d=neck_diameter, w=thread_dimensions, b=vertical_bias, a=spin (for cap), n=count,
 // cap=cap_mode, gap=spacing, c=thread_lead
 // when n>1 and !cap, each thread bends down to provide a stop for the lug neck finish
-module bottle_thread(d, pitch=4, h=[0,10], w=[1.2,0.8], b=0, a=0, n=1, cap=false, gap=0, c=3) {
+module bottle_thread(d, pitch=4, h=[0,10], w=[1.2,0.8], b=0, a=0, n=1, cap=false, gap=0, c=2) {
   w0 = opt(w, 0);
   w1 = opt(w, 1);
-  r = d/2 + (cap ? sqrt(2+(w0-w1)/w0)*w0+gap+0.1 : -gap-0.2);
-  h0 = is_list(h) ? h[0] : 0;
-  h1 = is_list(h) ? h[1] : h;
+  r = d/2 + (cap ? w0+gap+0.3 : -gap-0.3);
+  h0 = is_list(h) ? h[0]-b : -b;
+  h1 = is_list(h) ? h[1]-b : h-b;
   hh = h1-h0;
+  c = cap ? c : min(2, c);
   zp = pitch==0; // zero pitch
   k = zp ? 1 : hh/pitch; // how many rounds
-  g = zp ? ring_path(d) : [let(d=k*d*PI, a0=360*h0/pitch) for (t=quanta(ceil(d/$fs))) let(a=a0+t*k*360) [r*cos(a),r*sin(a),b+h0+hh*t-(cap||n==1?0:w1*3*max(0,1-d*t/6)^7)]];
-  radiate(n) spin(a) translate([0,0,pitch*a/360]) {
+  g = zp ? ring_path(d) : [let(d=k*d*PI, a0=360*h0/pitch) for (t=quanta(ceil(d/$fs))) let(i=a0+t*k*360) [r*cos(i),r*sin(i),b+h0+hh*t-(cap||n==1?0:w1*2*max(0,1-d*t/6)^7)]];
+  radiate(n) spin(a) translate([0,0,pitch*a/360+(n==1?0:w1*2.6)]) {
     fillet_sweep(round_path(w0+0.2, w1, cap?[90,270]:[-90,90]), g, c0=zp?0:c, c1=zp?0:c, twist=false, loop=zp);
     if (!cap && n>1) let(e=g[len(g)-1]) orient(force2d(e)) slide(x=r+0.1) flipy(90, e[2]-w1*2-0.3) cookie_extrude(ring_path(w1*2), w0*0.8); // bump
   }
@@ -1871,21 +1872,26 @@ module bottle_thread(d, pitch=4, h=[0,10], w=[1.2,0.8], b=0, a=0, n=1, cap=false
 }
 
 // thread on a cap (unlike nut_thread, not a negative space), to pair with bottle_thread()
-module cap_thread(d, pitch=4, h=[0,10], w=[1.2,0.8], b=0, a=0, n=1, gap=0, c=3) {
-  bottle_thread(d=d, pitch=pitch, h=h, w=w, b=b, a=a, n=n, cap=true, gap=gap, c=c) children();
+module cap_thread(d, pitch=4, h=[0,10], w=[1.2,0.8], b=0, a=0, n=1, gap=0.2, c=3) {
+  w0 = opt(w, 0);
+  w1 = opt(w, 1);
+  bb = b-sqrt(3)*(w0-0.1)*w1/w0;
+  bottle_thread(d=d, pitch=pitch, h=h, w=w, b=bb, a=a, n=n, cap=true, gap=gap, c=c) children();
 }
 
 // lug threads on a bottle: d=neck_diameter, w=thread_dimensions, b=baseline, a=spin, n=count, cap=cap_mode, gap=spacing
 module bottle_lugs(d, pitch=1, w=[1.2,0.8], b=0, a=0, n=4, cap=false, gap=0) {
   w0 = opt(w, 0);
   w1 = opt(w, 1);
+  bb = cap ? b-sqrt(3)*(w0-0.2)*w1/w0 : b;
   n = max(2, n); // at least 2
-  h = pitch*[(cap?w1*2.7/(PI*d):0), 1/(n*2)-(cap?2:1.1)/(PI*d)]; // lower and upper range
-  bottle_thread(d=d, pitch=pitch, h=h, w=w, b=b+(cap?0:w1+0.4), a=a, n=n, cap=cap, gap=gap) children();
+  h0 = cap ? pitch*0.04 : 0;
+  h1 = pitch*(1/(n*2)-(cap?2.1:1.1)/(PI*d));
+  bottle_thread(d=d, pitch=pitch, h=[h0,h1], w=w, b=bb, a=a+360*bb/pitch, n=n, cap=cap, gap=gap) children();
 }
 
 // lug threads on a cap, to pair with bottle_lugs()
-module cap_lugs(d, pitch=1, w=[1.2,0.8], b=0, a=0, n=4, gap=0) {
+module cap_lugs(d, pitch=1, w=[1.2,0.8], b=0, a=0, n=4, gap=0.2) {
   bottle_lugs(d=d, pitch=pitch, w=w, b=b, a=a, n=n, cap=true, gap=gap) children();
 }
 
