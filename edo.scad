@@ -1885,7 +1885,7 @@ module bottle_lugs(d, pitch=1, w=[1.2,0.8], b=0, a=0, n=4, cap=false, gap=0) {
   w1 = opt(w, 1);
   bb = cap ? b-sqrt(3)*(w0-0.2)*w1/w0 : b;
   n = max(2, n); // at least 2
-  h0 = cap ? pitch*0.04 : 0;
+  h0 = cap ? pitch*w1*2.8/(PI*d) : 0;
   h1 = pitch*(1/(n*2)-(cap?2.1:1.1)/(PI*d));
   bottle_thread(d=d, pitch=pitch, h=[h0,h1], w=w, b=bb, a=a+360*bb/pitch, n=n, cap=cap, gap=gap) children();
 }
