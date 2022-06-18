@@ -1873,7 +1873,7 @@ module bottle_thread(d, pitch=4, h=[0,10], w=[1.2,0.8], b=0, a=0, n=1, cap=false
   zp = pitch==0; // zero pitch
   k = zp ? 1 : hh/pitch; // how many rounds
   g = zp ? ring_path(d) : [let(d=k*d*PI, a0=360*h0/pitch) for (t=quanta(ceil(d/$fs))) let(i=a0+t*k*360) [r*cos(i),r*sin(i),b+h0+hh*t-(cap||n==1?0:w1*2*max(0,1-d*t/6)^7)]];
-  radiate(n) spin(a) translate([0,0,pitch*a/360+(n==1?0:w1*2.6)]) {
+  radiate(n) spin(a) translate([0,0,pitch*a/360+(n==1?0:w1*2.8)]) {
     fillet_sweep(round_path(w0+0.2, w1, cap?[90,270]:[-90,90]), g, c0=zp?0:c, c1=zp?0:c, twist=false, loop=zp);
     if (!cap && n>1) let(e=g[len(g)-1]) orient(force2d(e)) slide(x=r+0.1) flipy(90, e[2]-w1*2-0.3) cookie_extrude(ring_path(w1*2), w0*0.8); // bump
   }
@@ -1884,7 +1884,7 @@ module bottle_thread(d, pitch=4, h=[0,10], w=[1.2,0.8], b=0, a=0, n=1, cap=false
 module cap_thread(d, pitch=4, h=[0,10], w=[1.2,0.8], b=0, a=0, n=1, gap=0.2, c=3) {
   w0 = opt(w, 0);
   w1 = opt(w, 1);
-  bb = b-sqrt(3)*(w0-0.1)*w1/w0;
+  bb = b-sqrt(3)*(w0-0.2)*w1/w0;
   bottle_thread(d=d, pitch=pitch, h=h, w=w, b=bb, a=a, n=n, cap=true, gap=gap, c=c) children();
 }
 
@@ -1892,7 +1892,7 @@ module cap_thread(d, pitch=4, h=[0,10], w=[1.2,0.8], b=0, a=0, n=1, gap=0.2, c=3
 module bottle_lugs(d, pitch=1, w=[1.2,0.8], b=0, a=0, n=4, cap=false, gap=0) {
   w0 = opt(w, 0);
   w1 = opt(w, 1);
-  bb = cap ? b-sqrt(3)*(w0-0.2)*w1/w0 : b;
+  bb = cap ? b-sqrt(3)*(w0-0.05)*w1/w0 : b;
   n = max(2, n); // at least 2
   h0 = cap ? pitch*w1*2.8/(PI*d) : 0;
   h1 = pitch*(1/(n*2)-(cap?2.1:1.1)/(PI*d));
@@ -1900,7 +1900,7 @@ module bottle_lugs(d, pitch=1, w=[1.2,0.8], b=0, a=0, n=4, cap=false, gap=0) {
 }
 
 // lug threads on a cap, to pair with bottle_lugs()
-module cap_lugs(d, pitch=1, w=[1.2,0.8], b=0, a=0, n=4, gap=0.2) {
+module cap_lugs(d, pitch=1, w=[1.2,0.8], b=0, a=0, n=4, gap=0) {
   bottle_lugs(d=d, pitch=pitch, w=w, b=b, a=a, n=n, cap=true, gap=gap) children();
 }
 
