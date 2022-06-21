@@ -1374,8 +1374,14 @@ module strip(path, h=10, t=1, r=2, s=5, f=1) {
 module beam(p1, p2, dm=0.5, c=0, m) {
   a = as3d(p1);
   b = as3d(p2);
-  p = is_list(dm) ? quad_path(dm[0], dm[1]) : ring_path(dm);
-  fillet_sweep(p, [a,b], c0=c, c1=c);
+  d = b-a;
+  translate(a) orient(d) {
+    if (is_list(dm)) translate([0,0,norm(d)/2]) cube([dm[0],dm[1],norm(d)], center=true);
+    else if (m!=undef && m>0) pipe(d=dm, h=norm(d), m=m);
+    else if (c>0) fillet_sweep(ring_path(dm), [[0,0,0],d], c0=c, c1=c);
+    else cylinder(d=dm, h=norm(d), $fn=_fn(dm/2));
+  }
+
 }
 
 // an arrow of vector v at point p, d=diameter, c=cone length, r=cone-beam ratio (overrides c)
