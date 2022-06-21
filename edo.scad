@@ -26,6 +26,9 @@ function round2(n, d=0) = round(n*10^d)/10^d;
 // round n to the nearest multiple of d
 function mof(n, d=2) = round(n/d)*d;
 
+// boolean function for exclusive or
+function xor(a, b) = (a&&!b)||(!a&&b);
+
 // hyperbolic functions
 function sinh(t) = (exp(t)-exp(-t))/2;
 function cosh(t) = (exp(t)+exp(-t))/2;
@@ -204,8 +207,8 @@ function cyclic(array, n) = n==0 ? array : [let(k=len(array)) for (i=[n:n+k-1]) 
 // generate an array containing n copies of e
 function repeat(e, n=2) = [for (i=[1:n]) e];
 
-// reduce dimension of an array by promoting second-level elements to top
-function flatten(array) = [for (a=array, b=a) b];
+// reduce rank of an array by promoting second-level elements to top, i.e. [[a,b],[c]] to [a,b,c]
+function flatten(array) = [for (i=[0:len(array)-1]) each array[i]];
 
 // remove a list of indices from array
 function omit(array, list=[]) = [for (i=[0:len(array)-1]) if (len(search(i, list))==0) array[i]];
@@ -1105,6 +1108,11 @@ function scale_layers(layers, guide) = let(k=len(layers)-1) [for (i=[0:k]) [let(
 // spin layers about z-axis based on a unit guiding path representing [layer, angle]
 function spin_layers(layers, guide, a=60) = let(k=len(layers)-1, g=ifundef(guide, [[0,0],[1,a]])) [for (i=[0:k]) spin3d(layers[i], lookup(i/k, g))];
 
+// make sure layers can be rendered by layered_block()
+function rectify_layers(layers, invert=false) = let(k=len(layers)) k<2 || len(layers[0])<2 ? layers :
+  let(a=layers[0], b=layers[1], u=a[1]-a[0], v=a[len(a)-1]-a[0], w=b[0]-a[0])
+  reverse(layers, enable=xor(sign3v(u, v, w)<0, invert));
+
 // convert layers to slope lines and vice versa
 function isomesh(layers) = let(n=len(layers[0])-1) [for (i=[0:n]) [for (j=layers) j[i]]];
 
@@ -1370,6 +1378,7 @@ module beam(p1, p2, dm=0.5, c=0, m) {
     else if (c>0) fillet_sweep(ring_path(dm), [[0,0,0],d], c0=c, c1=c);
     else cylinder(d=dm, h=norm(d), $fn=_fn(dm/2));
   }
+
 }
 
 // an arrow of vector v at point p, d=diameter, c=cone length, r=cone-beam ratio (overrides c)
