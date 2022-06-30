@@ -223,7 +223,6 @@ function slice(array, idx, s=0) = [for (i=[0:len(array)-1]) around(array[i], idx
 function overlay(array, values) = values==undef ? array : [for (i=[0:len(array)-1]) append(array[i], opt(values, i))];
 
 // resize array by picking one out of every n elements (size increases due to duplicates if n < 1), s=shift
-//function every(array, n=1, s=0) = n==1 && s==0 ? array : let(k=len(array)) [if (k>n && n>0) for (i=[0:n:k-1]) array[(round(i)+s+k)%k]];
 function every(array, n=1, s=0, center=false) = n==1 && s==0 ? array : let(k=len(array), c=floor((k-1)/2), s=center?c%n:s%k) [if (k>n && n>0) for (i=[s:n:k-1]) let(j=round(i)) if (j<k) array[j]];
 
 // swap two elements in an array
@@ -1113,8 +1112,8 @@ function rectify_layers(layers, invert=false) = let(k=len(layers)) k<2 || len(la
   let(a=layers[0], b=layers[1], u=a[1]-a[0], v=a[len(a)-1]-a[0], w=b[0]-a[0])
   reverse(layers, enable=xor(sign3v(u, v, w)<0, invert));
 
-// convert layers to slope lines and vice versa
-function isomesh(layers) = let(n=len(layers[0])-1) [for (i=[0:n]) [for (j=layers) j[i]]];
+// convert layers to slope lines and vice versa, d=dilution, s=twist
+function isomesh(layers, d=1, s=0) = let(n=len(layers[0])) [for (i=[0:d:n-1]) [for (j=[0:len(layers)-1]) layers[j][round(i+n+j*s)%n]]];
 
 // morph linearly between 2 profiles (2D or 3D) of same cardinal, with t in [0,1), f = scaling factor
 function morph(p1, p2, t, f=1) = p1==p2 && f==1 ? p1 : [for (i=[0:len(p1)-1]) let(a=p1[i], b=p2[i]*f) a+(b-a)*t];
@@ -2187,6 +2186,11 @@ module layered_shell(layers, t=1.6, skip=0, flat=true) {
 module layered_dome(layers, inner=0.8, skip=3) {
   p = concat([for (l=reverse(snip(layers, skip))) expand2d(l, -inner)], layers);
   layered_block(p);
+}
+
+// knit a mesh on the points surface, t=thread_thickness, d=dilution, s=twist (e.g. [-1,0,1])
+module layered_mesh(layers, t=1.6, d=1, s=0) {
+  for (i=enlist(s), p=isomesh(layers, d, i)) trace(p, t);
 }
 
 // plot layers
