@@ -1733,12 +1733,12 @@ module shaft(locs=[[0,0]], zz=[-0.01,10], m=3, h, t, g=0, debug) {
   children();
 }
 
-// make a hole shaped by path in a list of locations, zz=[min,max] height range, e=clean cut allowance
-module oust(path, zz=[-10,10], locs=[[0,0]], e=0.01, enable=true, debug=false) {
+// make a hole shaped by profile in a list of locations, zz=[min,max] height range, e=clean cut allowance
+module oust(profile, zz=[-10,10], locs=[[0,0]], e=0.01, enable=true, debug=false) {
   zz = zz[1]?zz:[0,zz?zz:10];
-  if (enable && path != undef) difference() {
+  if (enable && profile != undef) difference() {
     children();
-    for (p=locs) translate([p[0],p[1],min(zz[0],zz[1])-e]) highlight(debug) solid(path, h=abs(zz[1]-zz[0])+e*2);
+    for (p=locs) translate([p[0],p[1],min(zz[0],zz[1])-e]) highlight(debug) solid(profile, h=abs(zz[1]-zz[0])+e*2);
   }
 }
 
