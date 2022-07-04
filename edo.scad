@@ -146,10 +146,10 @@ function strn(a, i=0) = is_list(a) ? i>=len(a) ? "\n" : str("\n", i, ": ", a[i],
 // example: resolve(function(t) t==undef ? [0:$fa:360-$fa] : [cos(t),sin(t)]*10)
 function resolve(schema) = is_function(schema) ? [for (t=schema()) schema(t)] : schema;
 
-// evaluate a unit parametric function in n equal steps, close=include final point
-function yield(fn, n=10, close=false, reverse=false) = [for (i=reverse?[n:-1:(close?0:1)]:[0:(close?n:n-1)]) fn(i/n)];
+// evaluate a unit trace function {fn:t->[x,y]} in n equal steps, close=include final point
+function locus(fn, n=10, close=false, reverse=false) = [for (i=reverse?[n:-1:(close?0:1)]:[0:(close?n:n-1)]) fn(i/n)];
 
-// graph a unit parametric function in n equal steps, close=include final point
+// graph a unit parametric function {fn:t->y} in n equal steps as {[t,y]}, close=include final point
 function graph(fn, n=10, scaler=[1,1], close=false, reverse=false) = [let (s0=opt(scaler, 0, 1), s1=opt(scaler, 1, 1)) for (i=reverse?[n:-1:(close?0:1)]:[0:(close?n:n-1)]) let(t=i/n) [t*s0,fn(t)*s1]];
 
 // generate a new parametric function which is product of two parametric functions
@@ -219,8 +219,8 @@ function eliminate(array, value) = [for (e=array) if (e!=value) e];
 // return one of the dimensions of an array, e.g. only z values of a set of 3D points, s=index shifting
 function slice(array, idx, s=0) = [for (i=[0:len(array)-1]) around(array[i], idx+i*s)];
 
-// overlay an extra dimension to array elements, e.g. [[1,0],[2,5]] and [7,8] -> [[1,0,7],[2,5,8]], values are cyclic
-function overlay(array, values) = values==undef ? array : [for (i=[0:len(array)-1]) append(array[i], opt(values, i))];
+// affix an extra dimension to array elements, e.g. affix([[1,0],[2,5]], [7,8]) -> [[1,0,7],[2,5,8]], tail is cyclic
+function affix(array, tail) = tail==undef ? array : [for (i=[0:len(array)-1]) append(array[i], opt(tail, i))];
 
 // resize array by picking one out of every n elements (size increases due to duplicates if n < 1), s=shift
 function every(array, n=1, s=0, center=false) = n==1 && s==0 ? array : let(k=len(array), c=floor((k-1)/2), s=center?c%n:s%k) [if (k>n && n>0) for (i=[s:n:k-1]) let(j=round(i)) if (j<k) array[j]];
@@ -757,12 +757,12 @@ function pad_path(w, d, r=2, half=false) =
   );
 
 // ====================================================================
-// unit guiding functions: [0,1] -> [0,1]
+// unit parametric functions: [0,1] -> [0,1]
 // ====================================================================
 
+unity_guide = function(t) t;
 poly_damp = function(t, d=3) (1-pow(1-2*t, d))/2;
 poly_ease = function(t, d=3) let(u=t*2, v=u-2, s=d%2?1:-1) u<1 ? pow(u,d)/2 : s*(pow(v,d)+s*2)/2;
-unity_guide = function(t) t;
 line_guide = function(t, start=1, end) start+(ifundef(end, 1-start)-start)*t;
 ripple_guide = function(t, d=5) (sin(360*t)+pow(sin(d*180*t),2))/4+0.5;
 pulse_guide = function(t) exp(-5*pow(6*t-1,2)/pow(4+2*t,2));
@@ -777,7 +777,7 @@ scale_guide = function(t, r0=0.1, r1) let(r1=ifundef(r1,r0)) // r0=head rounding
   r1!=0 && t>1-abs(r1) ? sqrt(1-pow(1-((1-min(1,t))/abs(r1)),2)) : 1;
 
 // ====================================================================
-// unit tracing functions: [0,1] -> [0,1]^2 or [0,1]^3
+// unit trace functions: [0,1] -> [0,1]^2 or [0,1]^3
 // ====================================================================
 
 apple_trace = function(t) let(a=0.67, b=1.1, p=0.15, q=0.08, u=360*t-90, r=a*(1-sin(u)), d=PI*(u/180-1/2), s=d*d) [-b*r*exp(-q*s)*sin(u)-a*0.4,r*exp(-p*s)*cos(u)];
