@@ -147,10 +147,10 @@ function strn(a, i=0) = is_list(a) ? i>=len(a) ? "\n" : str("\n", i, ": ", a[i],
 function resolve(schema) = is_function(schema) ? [for (t=schema()) schema(t)] : schema;
 
 // evaluate a unit trace function {fn:t->[x,y]} in n equal steps, close=include final point
-function locus(fn, n=10, close=false, reverse=false) = [for (i=reverse?[n:-1:(close?0:1)]:[0:(close?n:n-1)]) fn(i/n)];
+function locus(fn, n=10, close=true, reverse=false, arg=undef) = [for (i=reverse?[n:-1:(close?0:1)]:[0:(close?n:n-1)]) arg==undef ? fn(i/n) : fn(i/n, arg)];
 
 // graph a unit parametric function {fn:t->y} in n equal steps as {[t,y]}, close=include final point
-function graph(fn, n=10, scaler=[1,1], close=false, reverse=false) = [let (s0=opt(scaler, 0, 1), s1=opt(scaler, 1, 1)) for (i=reverse?[n:-1:(close?0:1)]:[0:(close?n:n-1)]) let(t=i/n) [t*s0,fn(t)*s1]];
+function graph(fn, n=10, scaler=[1,1], close=true, reverse=false, arg=undef) = [let (s0=opt(scaler, 0, 1), s1=opt(scaler, 1, 1)) for (i=reverse?[n:-1:(close?0:1)]:[0:(close?n:n-1)]) let(t=i/n) [t*s0,(arg==undef?fn(t):fn(t, arg))*s1]];
 
 // generate a new parametric function which is product of two parametric functions
 fxf = function(fn1, fn2) function(t) fn1(t)*fn2(t);
@@ -775,6 +775,7 @@ fillet_guide = function(t, r0=0.1, r1) let(r1=ifundef(r1,r0)) // r0=head roundin
 scale_guide = function(t, r0=0.1, r1) let(r1=ifundef(r1,r0)) // r0=head rounding, r1=tail rounding
   r0!=0 && t<abs(r0) ? sqrt(1-pow(1-t/abs(r0),2)) :
   r1!=0 && t>1-abs(r1) ? sqrt(1-pow(1-((1-min(1,t))/abs(r1)),2)) : 1;
+arc_guide = function(t, f=0.1) let(r=(f*f+0.25)/f/2, k=sqrt(r*r-0.25), s=asin(0.5/r), a=t*2*s-s) r*cos(a)-k;
 
 // ====================================================================
 // unit trace functions: [0,1] -> [0,1]^2 or [0,1]^3
@@ -799,6 +800,8 @@ fillet_trace = function(t, r0=0.1, r1) let(r1=ifundef(r1,r0)) // r0=head roundin
   r0!=0 && t<r0 ? [1,r0*2]-ring_trace(0.25+0.25*t/r0)*r0*2 :
   r1!=0 && t>1-r1 ? [1,1]-ring_trace(0.75-0.25*(1-t)/r1)*r1*2 : [1,t];
 inf_trace = function(t, z=0) let(a=t*360) [cos(a), sin(a*2)/2, z*sin(a)/4]/(3-cos(a*2)); // 3D, z=z scale
+arc_trace = function(t, f=0.1) let(r=(f*f+0.25)/f/2, k=sqrt(r*r-0.25), s=asin(0.5/r), a=t*2*s-s) [r*sin(a)+0.5,r*cos(a)-k]; // t spans angle
+bridge_trace = function(t, f=0.1) let(r=(f*f+0.25)/f/2, x=t-0.5) [t,sqrt(r*r-x*x)+f-r]; // t spans x-axis
 
 // ====================================================================
 // 2D paths between points
