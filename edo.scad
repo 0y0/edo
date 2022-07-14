@@ -570,7 +570,7 @@ function cut2d(s1, s2, e=0) = let(r=s1[1]-s1[0], s=s2[1]-s2[0], c=r && s ? cross
 
 // preserving vertices, align the starting point of profile to where dimension d changes sign (0=x, 1=y)
 // note that a profile not changing sign in dimension d will fail
-function home2d(profile, d=1) = let(k=len(profile), j=[for (i=[k-1:-1:0]) let(q1=profile[i][d], q2=profile[(i+1)%k][d]) if (q1==0 || (q1<0 && q2>=0)) i][0]) cyclic(profile, abs(profile[j][d])>abs(profile[(j+1)%k][d])? (j+1)%k : j);
+function refit2d(profile, d=1) = let(k=len(profile), j=[for (i=[k-1:-1:0]) let(q1=profile[i][d], q2=profile[(i+1)%k][d]) if (q1==0 || (q1<0 && q2>=0)) i][0]) cyclic(profile, abs(profile[j][d])>abs(profile[(j+1)%k][d])? (j+1)%k : j);
 
 // check if profile is strictly convex
 function convex2d(profile, f=0.001, i=0, k) = let(k=ifundef(k, len(profile))) i<k ? let(p0=profile[(i+k-1)%k], p1=profile[i], p2=profile[(i+1)%k]) convex2d(profile, f, i+1, k) && cross(unit(p2-p1), unit(p0-p1))>-f : true;
@@ -1123,7 +1123,7 @@ function morph(p1, p2, t, f=1) = p1==p2 && f==1 ? p1 : [for (i=[0:len(p1)-1]) le
 
 // interpolate layers by morphing between 2 profiles (2D or 3D) vertically, h=height, n=samples, s=cyclic offset
 // scaler=optional scaling function [[a,b],...] where a=scaling factor, b=proportion in [0,1)
-// result is a set of layers ready for layered_block()
+// result is a set of layers ready for layered_block() <<deprecated in preference to morph_smooth()>>
 function morph_between(p1, p2, h, scaler, n, s=0, z=0, end=1, curved=true) = 
   let(n=(n!=undef?n:max(len(p1),len(p2))), q1=cyclic(resample(p1, n), s), q2=resample(p2, n))
   scaler==undef ?
@@ -1131,7 +1131,7 @@ function morph_between(p1, p2, h, scaler, n, s=0, z=0, end=1, curved=true) =
   [for (g=scaler) ascend3d(morph(q1, q2, g[1])*g[0], g[1]*h+z)];
 
 // interpolate layers by morphing along a series of profiles (2D or 3D) vertically with given intervals
-// result is a set of layers ready for layered_block()
+// result is a set of layers ready for layered_block() <<deprecated in preference to morph_smooth()>>
 function morph_multiple(profiles, intervals, n, curved=false, z=0, i=0) =
   let(n=(n!=undef?n:max([for (p=profiles) len(p)])))
   i == len(profiles)-1 ? [ascend3d(resample(last(profiles), n), z)] : concat(
@@ -1145,9 +1145,9 @@ function morph_cookie(profile, h, b=0, origin=[0,0], f=0) =
   let(m=[for (t=quanta(n, end=1, max=90+f)) force3d(shift2d(p*cos(t-f), origin), b+(h-b)*sin(min(90,t)))])
   b<=0 ? m : prepend(m, force3d(shift2d(p, origin), 0));
 
-// smooth vertical morphing for a series of profiles spaced with given intervals
-// n=resolution, f=smoothness, d=alignment_axis (see home2d)
-function morph_smooth(profiles, intervals, n=200, f=7, d=1) = let(h=accum(intervals), p=[for (i=indices(profiles)) force3d(home2d(resample(profiles[i], n), d=d), h[i])]) isomesh([for (q=isomesh(p)) smooth(q, f, loop=false)]);
+// smooth vertical morphing for a series of profiles spaced with given intervals, see also fillet_sweep()
+// n=resolution, f=smoothness, d=alignment_axis (see refit2d)
+function morph_smooth(profiles, intervals, n=200, f=7, d=1) = let(h=accum(intervals), p=[for (i=indices(profiles)) force3d(refit2d(resample(profiles[i], n), d=d), h[i])]) isomesh([for (q=isomesh(p)) smooth(q, f, loop=false)]);
 
 // ====================================================================
 // 3D sweep functions - note that they return the layers in reverse order of path for correct surface norms
