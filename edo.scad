@@ -508,9 +508,10 @@ function shift2d(points, delta=[0,0]) = [for (p=points) [p[0]+delta[0],p[1]+delt
 // move 2D points to be just above a baseline parallel to the x-axis
 function float2d(points, baseline=0) = let(k=-min(slice(points, 1))) shift2d(points, [0,k+baseline]);
 
-// move 2D points to be flush/center against x-axis and/or y-axis wrt origin
-// xsign and ysign: undef=no change, 0=center, -ve/+ve=which side to move
-function flush2d(points, xsign, ysign, origin=[0,0]) = let(xx=minmax(slice(points, 0)), yy=minmax(slice(points, 1)))
+// shift 2D points to be flush/center against x-axis and/or y-axis wrt origin
+// xsign, ysign: undef=no change, 0=center, -ve/+ve=which side to go
+function flush2d(points, xsign, ysign, origin=[0,0]) =
+  let(xx=minmax(slice(points, 0)), yy=minmax(slice(points, 1)))
   let(dx=origin[0] - (xsign == undef ? 0 : xsign == 0 ? avg(xx) : xsign > 0 ? xx[0] : xx[1]))
   let(dy=origin[1] - (ysign == undef ? 0 : ysign == 0 ? avg(yy) : ysign > 0 ? yy[0] : yy[1]))
   shift2d(points, [dx,dy]);
@@ -906,12 +907,13 @@ function shift3d(points, vector) = [for (p=points) [p[0]+vector[0],p[1]+vector[1
 // shift 3D points as a whole to be just above xy-plane
 function float3d(points, z=0) = let(k=-min(slice(points, 2))) shift3d(points, [0,0,k+z]);
 
-// move 3D points to be flush against an axis (determined by the sign of xsign, ysign and zsign)
-function flush3d(points, xsign, ysign, zsign, shift) =
+// shift 3D points to be flush against an axis (determined by the sign of xsign, ysign and zsign)
+// xsign, ysign, zsign: undef=no change, 0=center, -ve/+ve=which side to go
+function flush3d(points, xsign, ysign, zsign, origin=[0,0,0]) =
   let(xx=minmax(slice(points, 0)), yy=minmax(slice(points, 1)), zz=minmax(slice(points, 2)))
-  let(dx=ifundef(shift[0], 0) + (xsign == undef || xsign == 0 ? 0 : xsign > 0 ? -xx[0] : -xx[1]))
-  let(dy=ifundef(shift[1], 0) + (ysign == undef || ysign == 0 ? 0 : ysign > 0 ? -yy[0] : -yy[1]))
-  let(dz=ifundef(shift[2], 0) + (zsign == undef || zsign == 0 ? 0 : zsign > 0 ? -zz[0] : -zz[1]))
+  let(dx=origin[0] - (xsign == undef ? 0 : xsign == 0 ? avg(xx) : xsign > 0 ? xx[0] : xx[1]))
+  let(dy=origin[1] - (ysign == undef ? 0 : ysign == 0 ? avg(yy) : ysign > 0 ? yy[0] : yy[1]))
+  let(dz=origin[2] - (zsign == undef ? 0 : zsign == 0 ? avg(zz) : zsign > 0 ? zz[0] : zz[1]))
   shift3d(points, [dx,dy,dz]);
 
 // centroid of 3D points
