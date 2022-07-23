@@ -308,7 +308,7 @@ function seams(path, loop=false, e=0.01) = let(k=len(path)) [for (i=[0:k-(loop?1
 function fuse(path, loop=false, e=0.01, i, q, f) = let(i=ifundef(i, len(path)-1), q=ifundef(q, loop?path[0]:undef), p=path[i], d=!q||norm(p-q)>e) i==0 ? [if (d||!f) p] : concat(fuse(path, loop, e, i-1, p, d?1:f), d?[p]:[]);
 
 // extend a path by adding length h to head and t to tail at consistent directions
-function elong(path, h=1, t=1) = let(k=len(path)) k<2 || (h==0 && t==0) ? path : let(v1=path[0]-path[1], v2=path[k-1]-path[k-2], n1=norm(v1), n2=norm(v2)) concat([path[1]+v1*(n1+h)/n1], [for (i=[1:k-2]) path[i]], [path[k-2]+v2*(n2+t)/n2]);
+function elong(path, h=1, t=1) = let(k=len(path)) k<2 || (h==0 && t==0) ? path : let(v1=path[0]-path[1], v2=path[k-1]-path[k-2], n1=norm(v1), n2=norm(v2)) concat([path[1]+v1*(n1+h)/n1], [if (k>2) for (i=[1:k-2]) path[i]], [path[k-2]+v2*(n2+t)/n2]);
 
 // a list of accumulated lengths along path for each point + last entry is the total length as a loop
 function mileage(path, i=0, s=0) = let(k=len(path)) i>k ? [] : concat([s], mileage(path, i+1, s+norm(path[(i+1)%k]-path[i%k])));
@@ -1356,8 +1356,8 @@ module basin(profile, h=5, t=1, bottom=0, inflate=0, r=2) {
   plate(profile, h=abs(t), t=0, bottom=bottom, inflate=inflate, r=r);
 }
 
-// a strip resting on its side along path, h=height, t=thickness, r=rounding, s=path softening, f=fillet
-module strip(path, h=10, t=1, r=2, s=5, f=1) {
+// a strip resting on its side along path, h=height, t=thickness, r=rounding, f=vertical fillet, s=path softening
+module strip(path, h=10, t=1, r=0, f=0, s=0) {
   path = soften(path, s, loop=false);
   f = min(f, h/2-1);
   r = min(r, h/2-f);
@@ -2230,6 +2230,11 @@ module sweep(profile, path, scaler, s=0, loop=false) {
   }
 }
 
+// sweep a profile along 3D path with pointy ends (like a calligraphy stroke), f=thickness control
+module sweep_stroke(profile, path, f=1) {
+  sweep(profile, path, [let(k=len(path)-1) for (i=[0:k]) let(t=i/k) [sin(t*180)^f,t]]);
+}
+
 // ====================================================================
 // placement modules
 // ====================================================================
@@ -2527,7 +2532,7 @@ module fillet_cube(dm, r=5, center=false) {
 
 // extrude a counterclockwise profile with configurable fillets at bottom (xz0) and top (xz1)
 // the default will round both top and bottom (set x in xz to zero for no fillet)
-module fillet_extrude(profile, h=1.6, xz0=[-1,1], xz1=[-1,-1], r0, r1, r, convex=false, core=true) {
+module fillet_extrude(profile, h=1.6, xz0=[-1,1], xz1=[-1,1], r0, r1, r, convex=false, core=true) {
   if (h>0) {
     a0 = r0==undef ? r==undef ? abs(xz0[1]) : abs(r) : abs(r0);
     a1 = r1==undef ? r==undef ? abs(xz1[1]) : abs(r) : abs(r1);
