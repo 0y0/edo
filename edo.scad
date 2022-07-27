@@ -305,7 +305,7 @@ function plumb(path, i=0, v=[0,0,1]) = let(k=len(path), i=(i+k)%k) (k<2||i>k-2) 
 function seams(path, loop=false, e=0.01) = let(k=len(path)) [for (i=[0:k-(loop?1:2)]) if (norm(path[i]-path[(i+1)%k])<=e) i];
 
 // eliminate adjacent duplicate points, e=threshold [private: i, q, f]
-function fuse(path, loop=false, e=0.01, i, q, f) = let(i=ifundef(i, len(path)-1), q=ifundef(q, loop?path[0]:undef), p=path[i], d=!q||norm(p-q)>e) i==0 ? [if (d||!f) p] : concat(fuse(path, loop, e, i-1, p, d?1:f), d?[p]:[]);
+function fuse(path, loop=false, e=0.01, i, q, f) = let(k=len(path)) k==0 ? path : let(i=ifundef(i, k-1), q=ifundef(q, loop?path[0]:undef), p=path[i], d=!q||norm(p-q)>e) i==0 ? [if (d||!f) p] : concat(fuse(path, loop, e, i-1, p, d?1:f), d?[p]:[]);
 
 // extend a path by adding length h to head and t to tail at consistent directions
 function elong(path, h=1, t=1) = let(k=len(path)) k<2 || (h==0 && t==0) ? path : let(v1=path[0]-path[1], v2=path[k-1]-path[k-2], n1=norm(v1), n2=norm(v2)) concat([path[1]+v1*(n1+h)/n1], [if (k>2) for (i=[1:k-2]) path[i]], [path[k-2]+v2*(n2+t)/n2]);
@@ -929,7 +929,7 @@ function spin3d(points, a) = points * m3_spin(a);
 function cross3d(points, i=0, u) = let(k=len(points), u=ifundef(u, points[1]-points[0])) i<k-2 ? let(v=points[(i+2)%k]-points[0]) cross(u, v) + cross3d(points, i+1, v) : points[0]*0;
 
 // convert points to 3D, set/override z if provided, otherwise preserve z or default to 0 {see ascend3d()}
-function force3d(points, z) = rank(points)>1 ? [for (p=points) [p[0],p[1],z==undef?ifundef(p[2],0):z]] : [points[0],points[1],z==undef?ifundef(points[2],0):z];
+function force3d(points, z) = rank(points)>1 ? [for (p=points) [p[0],p[1],z==undef?ifundef(p[2],0):z]] : len(points)>0 ? [points[0],points[1],z==undef?ifundef(points[2],0):z] : [];
 
 // shake up 3D points
 function shake3d(points, max=10, seed) = let(s=rnd_seed(seed)) [for (i=[0:len(points)-1]) points[i] + rnd(-max/2, max/2, 3, i+s/(i+1))];
