@@ -327,8 +327,17 @@ function path_lookup(path, t, loop=false, e=0) = let(p=close_loop(path, loop), k
 // e.g. return 1.25 if path is [[0,0],[10,0],[30,0]] and d=15; 2 if d=30; or undef if d<0 or d>30
 function path_where(path, d=0, i=0) = i<len(path)-1 ? let(s=norm(path[i]-path[i+1])) d>0 && d>s ? path_where(path, d-s, i+1) : (d<0 ? undef : i+d/s) : (abs(d)<0.001 ? i : undef);
 
+// similar to mileage() but also include point indices for lookup
+function path_map(path, loop=false, i=0, s=0) = let(p=i==0?close_loop(path, loop):path) concat([[s,i]], i==len(p)-1 ? [] : path_map(p, loop, i+1, s+norm(p[i+1]-p[i])));
+
 // combine a list of 3D paths end to end
 function path_concat(paths=[], i=0) = i>=len(paths) ? [] : let(p=paths[i]) concat(i>0 ? subarray(p, 1) : p, shift3d(path_concat(paths, i+1), last(p)-(paths[i+1] ? paths[i+1][0] : [0,0,0])));
+
+// return a subpath based on offsets h and t (+ve relative to start; -ve relative to end)
+// e.g. subpath(p, 1, -1) to trim off 1mm at each end; subpath(p, -2) to remove all but the last 2mm
+function subpath(path, h=0, t=0) = h==0 && t==0 ? path :
+  let(m=path_map(path), k=m[len(m)-1][0], i1=lookup(h<0?k+h:h, m), i2=lookup(t<=0?k+t:t, m))
+  let(j1=ceil(i1), j2=floor(i2), f1=i1%1, f2=i2%1) i1>=i2 ? [] : concat([if (h!=0) path[j1]*f1+path[j1-1]*(1-f1)], [if (h==0||t==0||j1<j2) for (j=[j1:j2]) path[j]], [if (t!=0) path[j2]*(1-f2)+path[j2+1]*f2]);
 
 // shorten length of path by at least d, rounded off to the nearest vertex
 function shorten(path, d=0, i=0) = d>0 && i<len(path) ? shorten(path, d-norm(path[i]-path[i+1]), i+1) : snip(path, i);
