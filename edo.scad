@@ -1888,12 +1888,12 @@ module bottle_thread(d, pitch=4, h=[0,10], w=[1.2,0.8], b=0, a=0, n=1, cap=false
   h0 = is_list(h) ? h[0]-b : -b;
   h1 = is_list(h) ? h[1]-b : h-b;
   hh = h1-h0;
-  c = cap ? c : min(2, c);
   zp = pitch==0; // zero pitch
+  c = zp ? 0 : c;
   k = zp ? 1 : hh/pitch; // how many rounds
   g = zp ? ring_path(d) : [let(d=k*d*PI, a0=360*h0/pitch) for (t=quanta(ceil(d/$fs))) let(i=a0+t*k*360) [r*cos(i),r*sin(i),b+h0+hh*t-(cap||n==1?0:w1*2*max(0,1-d*t/6)^7)]];
   radiate(n) spin(a) translate([0,0,pitch*a/360+(n==1?0:w1*2.8)]) {
-    fillet_sweep(round_path(w0+0.2, w1, cap?[90,270]:[-90,90]), g, c0=zp?0:c, c1=zp?0:c, twist=false, loop=zp);
+    fillet_sweep(round_path(w0+0.2, w1, cap?[90,270]:[-90,90]), g, c0=c, c1=c, twist=false, loop=zp);
     if (!cap && n>1) let(e=g[len(g)-1]) orient(force2d(e)) slide(x=r+0.1) flipy(90, e[2]-w1*2-0.3) cookie_extrude(ring_path(w1*2), w0*0.8); // bump
   }
   children();
@@ -2218,8 +2218,8 @@ module plot_layers(layers, intervals, d=0.2, loop=false, color, dup=false) {
 }
 
 // plot slopes
-module plot_slopes(layers, d=0.2, color) {
-  for (k=isomesh(layers)) plot(k, d=d, loop=false, color=color);
+module plot_slopes(layers, d=0.2, color, dup=false) {
+  for (k=isomesh(layers)) plot(k, d=d, loop=false, color=color, dup=dup);
 }
 
 // sweep a profile along 3D path, scaler=[[f,t],...] where f=scaling factor, t=proportion in [0,1], s=twist
@@ -2561,21 +2561,18 @@ module fillet_extrude(profile, h=1.6, xz0=[-1,1], xz1=[-1,1], r0, r1, r, convex=
 }
 
 // sweep profile along path with end caps defined by c0,c1=[r,e] where r=fillet radius, e=cap length (optional)
-module fillet_sweep(profile, path, c0, c1, s=0, twist=true, loop=false) {
+module fillet_sweep(profile, path, c0, c1, s=0, twist=true, loop=false, offset=false) {
   k = len(path);
   if (k>1) {
-    rr = max([for (p=profile) norm(p)]);
-    r0 = min(rr, opt(c0, 0, rr)); // start cap radius
-    r1 = min(rr, opt(c1, 0, rr)); // end cap radius
+    r0 = opt(c0, 0); // start cap radius
+    r1 = opt(c1, 0); // end cap radius
     e0 = abs(opt(c0, 1, r0)); // start cap length
     e1 = abs(opt(c1, 1, r1)); // end cap length
-    s0 = [let(fa=_fa(r0, e0)) if (e0>0) for (t=[0:fa:90-fa]) cos(t)*e0];
-    s1 = [let(fa=_fa(r1, e1)) if (e1>0) for (t=[fa:fa:90]) sin(t)*e1];
-    v0 = [let(b=path[0], t=unit(path[0]-path[1])) for (s=s0) b+t*s];
-    v1 = [let(b=path[k-1], t=unit(path[k-1]-path[k-2])) for (s=s1) b+t*s];
-    p = concat(v0, path, v1);
-    g = [let(k=len(p), a0=len(v0), a1=len(v1)) for (i=[0:k-1]) let(t=i/k) i<a0 ? [1-(1-sin(90*i/a0))*r0/rr,t] : i>=k-a1 ? [1-(1-sin(90*(k-i-1)/a1))*r1/rr,t] : [1,t]];
-    layered_block(sweep_layers([for (i=g) profile*i[0]], force3d(p), s=s, twist=twist&&(s!=0||p[0][2]!=undef)), loop=loop);
+    a0 = [if (e0>0) let(fa=_fa(e0, r0), f=max(0,e0-r0)/e0) for (t=[0:fa:90-fa]) [cos(t)*e0,offset?(sin(t)-1)*r0:f+(1-f)*sin(t)]]; // start arc
+    a1 = [if (e1>0) let(fa=_fa(e1, r1), f=max(0,e1-r1)/e1) for (t=[fa:fa:90]) [sin(t)*e1,offset?(cos(t)-1)*r1:f+(1-f)*cos(t)]]; // end arc
+    c = concat([for (i=a0) offset?offset2d(profile, i[1]):profile*i[1]], [for (i=path) profile], [for (i=a1) offset?offset2d(profile, i[1]):profile*i[1]]);
+    p = concat([let(b=path[0], u=unit(b-path[1])) for (i=a0) b+u*i[0]], path, [let(b=path[k-1], u=unit(b-path[k-2])) for (i=a1) b+u*i[0]]);
+    layered_block(sweep_layers(c, force3d(p), s=s, twist=twist&&(s!=0||p[0][2]!=undef)), loop=loop);
   }
 }
 
