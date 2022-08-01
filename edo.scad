@@ -1884,7 +1884,7 @@ module nut_thread(m=[3,5], pitch=0.5, h=[0,10], b=[0,0], gap=0.4, v=1, debug=fal
 module bottle_thread(d, pitch=4, h=[0,10], w=[1.2,0.8], b=0, a=0, n=1, cap=false, gap=0, c=2) {
   w0 = opt(w, 0);
   w1 = opt(w, 1);
-  r = d/2 + (cap ? w0+gap+0.3 : -gap-0.3);
+  r = d/2 + (cap ? w0+gap+0.3 : -gap-0.2);
   h0 = is_list(h) ? h[0]-b : -b;
   h1 = is_list(h) ? h[1]-b : h-b;
   hh = h1-h0;
@@ -1911,7 +1911,7 @@ module cap_thread(d, pitch=4, h=[0,10], w=[1.2,0.8], b=0, a=0, n=1, gap=0.2, c=3
 module bottle_lugs(d, pitch=1, w=[1.2,0.8], b=0, a=0, n=4, cap=false, gap=0) {
   w0 = opt(w, 0);
   w1 = opt(w, 1);
-  bb = cap ? b-sqrt(3)*(w0-0.05)*w1/w0 : b;
+  bb = cap ? b-sqrt(3)*(w0-0.05)*w1/w0+0.1 : b;
   n = max(2, n); // at least 2
   h0 = cap ? pitch*w1*2.8/(PI*d) : 0;
   h1 = pitch*(1/(n*2)-(cap?2.1:1.1)/(PI*d));
