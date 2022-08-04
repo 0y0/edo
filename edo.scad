@@ -279,8 +279,8 @@ function zoom(array, ratio) = [for (i=incline(array)) array[i]*(is_list(ratio)?r
 // apply one factor per dimension, e.g. shear(array, [1,-1]) will reflect 2D points along y-axis
 function shear(array, factors) = [for (e=array) [for (i=incline(e)) e[i]*factors[i]]];
 
-// unique pairs of all elements (use range to filter out pairs too far apart)
-function pairs(array, range=0) = let(k=len(array)-1) [for (i=[0:k], j=[0:k]) if (i>j && (range==0||range>abs(i-j))) [array[i],array[j]]];
+// unique pairs of all elements (when range>0 include only pairs with indices no greater than range apart)
+function pairs(array, range=0) = let(k=len(array)-1) [for (i=[0:k], j=[0:k]) if (i>j && (range==0||range>(i-j))) [array[i],array[j]]];
 
 // ====================================================================
 // 3D path functions
@@ -333,8 +333,8 @@ function path_map(path, loop=false, i=0, s=0) = let(p=i==0?close_loop(path, loop
 // combine a list of 3D paths end to end
 function path_concat(paths=[], i=0) = i>=len(paths) ? [] : let(p=paths[i]) concat(i>0 ? subarray(p, 1) : p, shift3d(path_concat(paths, i+1), last(p)-(paths[i+1] ? paths[i+1][0] : [0,0,0])));
 
-// return a subpath based on offsets h and t (+ve relative to start; -ve relative to end)
-// e.g. subpath(p, 1, -1) to trim off 1mm at each end; subpath(p, -2) to remove all but the last 2mm
+// return a subpath based on offsets h and t in mm (+ve relative to start; -ve relative to end; zero means no change)
+// e.g. subpath(p, 1, -1) to trim off 1mm at each end; subpath(p, -2, 0) to remove all but the last 2mm
 function subpath(path, h=0, t=0) = h==0 && t==0 ? path :
   let(m=path_map(path), k=m[len(m)-1][0], i1=lookup(h<0?k+h:h, m), i2=lookup(t<=0?k+t:t, m))
   let(j1=ceil(i1), j2=floor(i2), f1=i1%1, f2=i2%1) i1>=i2 ? [] : concat([if (h!=0) path[j1]*f1+path[j1-1]*(1-f1)], [if (h==0||t==0||j1<j2) for (j=[j1:j2]) path[j]], [if (t!=0) path[j2]*(1-f2)+path[j2+1]*f2]);
@@ -342,7 +342,7 @@ function subpath(path, h=0, t=0) = h==0 && t==0 ? path :
 // shorten length of path by at least d, rounded off to the nearest vertex
 function shorten(path, d=0, i=0) = d>0 && i<len(path) ? shorten(path, d-norm(path[i]-path[i+1]), i+1) : snip(path, i);
 
-// resample path to increase or decrease number of points to n
+// resample path to increase or decrease number of points to n, without preserving original points
 function resample(path, n, loop=true) = let(n=ifundef(n, len(path))) n<=0 ? path : let(q=close_loop(path, enable=loop), k=len(q), mg=mileage(q), d=len(q[0]), mp=[for (j=[0:d-1]) [for (i=[0:k-1]) [mg[i], q[i][j]]]]) [for (t=quanta(n, max=mg[k-1], end=loop?0.9999:1)) [for (s=[0:d-1]) lookup(t, mp[s])]];
 
 // create a straight path between two points with equal-length segments shorter than or equal to ds {see ruler_path()}
@@ -492,7 +492,7 @@ function angle2d(u, v) = atan2(v*[-u[1],u[0]], v*u);
 // rotate CCW 90 degrees about origin
 function orth2d(points) = is_list(points[0]) ? [for (p=points) [-p[1],p[0]]] : [-points[1],points[0]];
 
-// scale each coordinate individually
+// scale each coordinate individually {see shear()}
 function scale2d(points, ratios) = let(xs=opt(ratios,0), ys=opt(ratios,1,1)) [for (p=points) [p[0]*xs,p[1]*ys]];
 
 // fit points into a rectangle at origin of size dm (zero length means don't care), prop=preserve ratio
