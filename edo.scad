@@ -102,8 +102,8 @@ function interp(a, b, s) = a*(1-s) + b*s;
 // location almost reaching a from b with a gap of distance d
 function almost(a, b, d) = let(s=d/norm(a-b)) a*(1-s) + b*s;
 
-// for handling array type arguments: (1) wrap around if too short (2) accept scalar (3) provide default
-function opt(a, idx, df) = is_list(a) ? ifundef(around(a, idx), df) : (a==undef ? df : a);
+// for handling array type arguments: (1) reuse same scalar (2) wrap around if no df (3) df if no a[idx]
+function opt(a, idx, df) = is_list(a) ? df==undef ? wrap(a, idx) : ifundef(a[idx], df) : (a==undef ? df : a);
 
 // generate and echo a random integer seed only if undefined
 function rnd_seed(seed) = seed!=undef ? seed : tee(floor(rands(1000, 9999, 1)[0]), "seed", $debug);
@@ -190,7 +190,7 @@ function enlist(e) = is_list(e) ? e : [e];
 function redim(array, n, pad=0) = n>0 ? let(a=enlist(array)) [for (i=[0:n-1]) ifundef(a[i], pad)] : [];
 
 // get element by wrapping around index
-function around(array, idx) = array[mod(idx, len(array))];
+function wrap(array, idx) = array[mod(idx, len(array))];
 
 // get element by applying mod() or curb() on index which can be out of range
 function elem(array, idx, loop=false) = loop ? array[mod(idx, len(array))] : array[curb(idx, len(array))];
@@ -217,7 +217,7 @@ function omit(array, list=[]) = [for (i=[0:len(array)-1]) if (len(search(i, list
 function eliminate(array, value) = [for (e=array) if (e!=value) e];
 
 // return one of the dimensions of an array, e.g. only z values of a set of 3D points, s=index shifting
-function slice(array, idx, s=0) = [for (i=[0:len(array)-1]) around(array[i], idx+i*s)];
+function slice(array, idx, s=0) = [for (i=[0:len(array)-1]) wrap(array[i], idx+i*s)];
 
 // affix an extra dimension to array elements, e.g. affix([[1,0],[2,5]], [7,8]) -> [[1,0,7],[2,5,8]], tail is cyclic
 function affix(array, tail) = tail==undef ? array : [for (i=[0:len(array)-1]) append(array[i], opt(tail, i))];
@@ -493,7 +493,7 @@ function angle2d(u, v) = atan2(v*[-u[1],u[0]], v*u);
 function orth2d(points) = is_list(points[0]) ? [for (p=points) [-p[1],p[0]]] : [-points[1],points[0]];
 
 // scale each coordinate individually
-function scale2d(points, xscale=1, yscale) = let(ys=yscale?yscale:xscale) [for (p=points) [p[0]*xscale,p[1]*ys]];
+function scale2d(points, ratios) = let(xs=opt(ratios,0), ys=opt(ratios,1,1)) [for (p=points) [p[0]*xs,p[1]*ys]];
 
 // fit points into a rectangle at origin of size dm (zero length means don't care), prop=preserve ratio
 // if dm is a scalar, fit points into a circle of diameter dm at origin
@@ -899,7 +899,7 @@ function mash3d(points, l, h) = [for (p=points) let(z=l==undef?p[2]:max(l,p[2]))
 function filter3d(points, l, h) = [for (p=points) if (within(p[2], l, h)) p];
 
 // scale 3D points, ratios=[xscale,yscale,zscale]
-function scale3d(points, ratios, origin=[0,0,0]) = let(xs=opt(ratios, 0), ys=opt(ratios, 1), zs=opt(ratios, 2)) [for (p=shift3d(points, -origin)) [p[0]*xs,p[1]*ys,ifundef(p[2],0)*zs]+origin];
+function scale3d(points, ratios, origin=[0,0,0]) = let(xs=opt(ratios,0), ys=opt(ratios,1,1), zs=opt(ratios,2,1)) [for (p=shift3d(points, -origin)) [p[0]*xs,p[1]*ys,ifundef(p[2],0)*zs]+origin];
 
 // project 3D points onto the unit sphere (radius = 1) at origin
 function unit3d(points, origin=[0,0,0]) = [for (p=points) p / norm(p-origin)];
@@ -2582,7 +2582,7 @@ module fillet_lid(profile, h=5, t=1.6, e=3, g=0.1, top=true, flip=false, tidy) {
   td = t>0 && convex2d(profile) ? 0 : tidy;
   te = max(tt/2-g, 1);
   e = max(e, tt/2);
-  p = scale2d(reverse(profile, loop=true), -1, 1); // flip over
+  p = scale2d(reverse(profile, loop=true), [-1,1]); // flip over
   pp = offset2d(p, -g-(t<0?tt:0), tidy=td);
   m1 = [for (i=arc_path(tt*2, [-90,0])) force3d(offset2d(p, i[0]-(t<0?tt:0), tidy=td), tt+i[1])];
   m2 = [force3d(last(m1), h+tt), force3d(pp, h+tt), force3d(pp, h+tt+e)];
@@ -2775,7 +2775,7 @@ module morph_case(p1, p2, h, guide, cut=0.5, s=0, j=5, inner=0.95, visible=true)
   n = max(len(p1), len(p2));
   q1 = cyclic(resample(p1, n), s);
   q2 = resample(p2, n);
-  guide = (guide!=undef?guide:shift2d(concat([for (t=quanta(20)) [1,-0.5*(1-t)]], scale2d(round_path(h, a=[0,90])/h, 1, 0.5)), [0,0.5]));
+  guide = (guide!=undef?guide:shift2d(concat([for (t=quanta(20)) [1,-0.5*(1-t)]], scale2d(round_path(h, a=[0,90])/h, [1,0.5])), [0,0.5]));
   gap = 0.4/h;
   w = box2dw(p1)+5;
 
