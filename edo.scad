@@ -826,8 +826,8 @@ function cw_path(p1, p2, f=2, i=0, po) = let(m=(p1+p2)/2, ov=orth2d(p1-p2), u=un
   let(pm=o-r*u) concat(cw_path(p1, pm, f, i+1, o), cw_path(pm, p2, f, i+1, o), i==0?[p2]:[]);
 function sin_path(p1, p2, n=1, m=0.5) = let(v=p2-p1, ov=orth2d(v)*m) [for (t=quanta(n*90, end=1)) p1+t*v+sin(t*n*360)*ov];
 function cos_path(p1, p2, n=1, m=0.5) = let(v=p2-p1, ov=orth2d(v)*m) [for (t=quanta(n*90, end=1)) p1+t*v+cos(t*n*360)*ov];
-function peanut_path(p1, p2, w=10, f=1.2) = let(m=(p1+p2)/2, e=p2-p1, h=norm(e), c=e[0]/h, s=e[1]/h, v=h/2) [for (t=quanta(ceil(perimeter(v, w)/8/$fs)*2)) let(a=t*360) m + [cos(a)*(v+f*w/2),(2*sin(a)-sin(a)^5)*w/2] * [[c,s],[-s,c]]];
-function airfoil_path(p1, p2, w=5, f=0.3, b, s) = let(u=unit([p1.y-p2.y,p2.x-p1.x]), a1=opt(f,0,0.3), a2=is_list(f)?opt(f,1):0, m=(p1+p2)/2+ifundef(b,[0,0]), p11=p1-a1*u, p12=p1+a1*u, p21=p2-a2*u, p22=p2+a2*u, pm1=m-w*u/2, pm2=m+w*u/2) smooth([p11,pm1,p21,p22,pm2,p12], div=s, loop=true);
+function peanut_path(p1, p2, w=10, f=1.2) = let(m=(p1+p2)/2, e=p1-p2, h=norm(e), c=e[0]/h, s=e[1]/h, v=h/2) [for (t=quanta(ceil(perimeter(v, w)/8/$fs)*2)) let(a=t*360) m + [cos(a)*(v+f*w/2),(2*sin(a)-sin(a)^5)*w/2] * [[c,s],[-s,c]]];
+function airfoil_path(p1, p2, w=5, f=0.3, b, s) = let(u=unit([p1.y-p2.y,p2.x-p1.x]), a1=opt(f,0,0.3), a2=is_list(f)?opt(f,1):0, m=(p1+p2)/2+ifundef(b,[0,0]), p11=p1-a1*u, p12=p1+a1*u, p21=p2-a2*u, p22=p2+a2*u, pm1=m-w*u/2, pm2=m+w*u/2) smooth([p11,pm1,p21,p22,pm2,p12], div=s, loop=true); // f=tip shaping, b=bias, s=resolution
 
 // ====================================================================
 // 3D paths between points
