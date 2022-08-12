@@ -827,6 +827,7 @@ function cw_path(p1, p2, f=2, i=0, po) = let(m=(p1+p2)/2, ov=orth2d(p1-p2), u=un
 function sin_path(p1, p2, n=1, m=0.5) = let(v=p2-p1, ov=orth2d(v)*m) [for (t=quanta(n*90, end=1)) p1+t*v+sin(t*n*360)*ov];
 function cos_path(p1, p2, n=1, m=0.5) = let(v=p2-p1, ov=orth2d(v)*m) [for (t=quanta(n*90, end=1)) p1+t*v+cos(t*n*360)*ov];
 function peanut_path(p1, p2, w=10, f=1.2) = let(m=(p1+p2)/2, e=p2-p1, h=norm(e), c=e[0]/h, s=e[1]/h, v=h/2) [for (t=quanta(ceil(perimeter(v, w)/8/$fs)*2)) let(a=t*360) m + [cos(a)*(v+f*w/2),(2*sin(a)-sin(a)^5)*w/2] * [[c,s],[-s,c]]];
+function airfoil_path(p1, p2, w=5, f=0.3, b, s) = let(u=unit([p1.y-p2.y,p2.x-p1.x]), a1=opt(f,0,0.3), a2=is_list(f)?opt(f,1):0, m=(p1+p2)/2+ifundef(b,[0,0]), p11=p1-a1*u, p12=p1+a1*u, p21=p2-a2*u, p22=p2+a2*u, pm1=m-w*u/2, pm2=m+w*u/2) smooth([p11,pm1,p21,p22,pm2,p12], div=s, loop=true);
 
 // ====================================================================
 // 3D paths between points
@@ -2240,8 +2241,9 @@ module sweep(profile, path, scaler, s=0, loop=false) {
 }
 
 // sweep a profile along 3D path with pointy ends (like a calligraphy stroke), f=thickness control
-module sweep_stroke(profile, path, f=1) {
-  sweep(profile, path, [let(k=len(path)-1) for (i=[0:k]) let(t=i/k) [sin(t*180)^f,t]]);
+module sweep_stroke(profile, path, f=1, flat=false) {
+  layers = [for (t=quanta(len(path)-1, end=1)) let(s=sin(t*180)^f) flat ? scale2d(profile, [s,1]) : profile*s];
+  layered_block(sweep_layers(layers, force3d(path), loop=false, s=0), loop=false);
 }
 
 // ====================================================================
