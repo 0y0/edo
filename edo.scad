@@ -13,6 +13,11 @@ $fs = 0+0.3;
 $inf = 1/0; // infinity
 $debug = false;
 
+// $BATCH is a boolean marker defined only from command line in batch-mode
+$BATCH=false;
+// $NOW is current timestamp defined only from command line for batch-mode logging
+$NOW=undef;
+
 // ====================================================================
 // math functions
 // ====================================================================
@@ -2700,7 +2705,7 @@ module weld(r=3, n) {
   $fn = $fn ? $fn : $preview ? 16 : 0; // preview in low resolution if $fn not set
   children();
   if (r>0) for (i=[0:$children-1], j=[0:$children-1]) if (i<j) {
-    _merge(r, (n!=undef?n:ceil(_fn(r)/4))) {
+    _merge(r, $preview ? 1 : n==undef ? ceil(_fn(r)/4) : n) {
       children(i);
       children(j);
       render() intersection() {
@@ -2835,7 +2840,3 @@ module box_bin(dm, t=2, r=2, gh=3, gd=0.5, sp=0.2, notch=false) {
 module box_gasket(dm, d=1, r=2) {
   sweep(ring_path(d), force3d(pad_path(dm[0], dm[1], r), dm[2]), loop=true);
 }
-
-// $NOW is current timestamp defined only from command line for batch-mode logging
-$NOW=undef;
-
