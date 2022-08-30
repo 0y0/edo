@@ -1176,7 +1176,7 @@ function morph_smooth(profiles, intervals, n=200, f=7, d=1) = let(h=accum(interv
 
 function sweep_profile(profile, path, loop=false, s=0, i=0, a, m, t) = let(k=len(path)) i==k ? [] :
   let(profile=i==0 ? force3d(profile) : profile, a=i==0 ? m3_spin(sweep_twist(path, loop, k, s)) : a)
-  let(tt=sweep_tangent(path, loop, k, i), mm=(i==0 ? sweep_init(tt)*m3_rotate(tt, [0,1,0]) : m*m3_rotate(tt, t)))
+  let(tt=sweep_tangent(path, loop, k, i), mm=(i==0 ? sweep_init(tt) : m*m3_rotate(tt, t)))
   concat(sweep_profile(profile, path, loop, s, i+1, a, a*mm, tt), [shift3d(profile*mm, path[i])]);
 
 // f in [0,1] determines how steep an angle has to be before toning it down by distortion (the less the steeper)
@@ -1185,7 +1185,7 @@ function sweep_pipe(profile, path, loop=false, s=0, f=0.3, i=0, a, m, t) = let(k
   let(p0=path[(i+k-1)%k], p1=path[i%k], p2=path[(i+1)%k])
   let(v1=unit(loop ? p1-p0 : path[max(1,i)]-path[max(0,i-1)]))
   let(v2=unit(loop ? p2-p1 : path[min(k-1,i+1)]-path[min(k-2,i)]))
-  let(tt=-v1==v2?v2:v1+v2, mm=i>0 ? m*m3_rotate(tt, t) : sweep_init(tt)*m3_rotate(tt, [0,1,0]))
+  let(tt=-v1==v2?v2:v1+v2, mm=i>0 ? m*m3_rotate(tt, t) : sweep_init(tt))
   let(d=unit(v2-v1)*(v1*v2<0 && norm(tt)<f?0.99:0))
   let(cp=[for (j=c*mm*m3_rotate(v1,tt)) let(q=proj3(j, v1, tt)) q-(q*d)*d+p1])
   concat(sweep_pipe(c, path, loop, s, f, i+1, a, a*mm, tt), [cp]);
@@ -1193,14 +1193,13 @@ function sweep_pipe(profile, path, loop=false, s=0, f=0.3, i=0, a, m, t) = let(k
 function sweep_wall(profile, path, loop=false, s=0, tilt=true, i=0, m, t) = let(k=len(path)) i==k ? [] :
   let(profile=i==0 ? force3d(profile) : profile, ti=sweep_tangent(path, loop, k, i))
   let(tt=[ti[0],ti[1],0], mp=m3_rotate([0,-ti[2]/norm(tt),tilt?1:1e20]))
-  let(mm=(i==0 ? sweep_init(tt)*m3_rotate(tt, [0,1,0]) : m*m3_rotate(tt, t)))
+  let(mm=(i==0 ? sweep_init(tt) : m*m3_rotate(tt, t)))
   concat(sweep_wall(profile, path, loop, s, tilt, i+1, mm, tt), [shift3d(profile*mp*mm, path[i])]);
 
 function sweep_layers(layers, path, loop=false, s=0, twist=true, i=0, a, m, t) = let(k=len(path)) i==k ? [] :
   let(a=i==0 ? twist ? m3_spin(sweep_twist(path, loop, k, -s)) : m3_ident() : a)
   let(c=layers[floor(len(layers)*i/k)], ti=sweep_tangent(path, loop, k, i), tt=twist ? ti : [ti[0],ti[1],0]) 
-  let(mm=(i==0 ? sweep_init(tt)*m3_rotate(tt, [0,1,0]) : m*m3_rotate(tt, t)))
-  let(mc=twist ? mm : m3_rotate([0,-ti[2]/norm(tt),1])*mm)
+  let(mm=(i==0 ? sweep_init(tt) : m*m3_rotate(tt, t)), mc=twist ? mm : m3_rotate([0,-ti[2]/norm(tt),1])*mm)
   concat(sweep_layers(layers, path, loop, s, twist, i+1, a, a*mm, tt), [shift3d(force3d(c, 0)*mc, path[i])]);
 
 // subroutine to find tangent at point i of path, k=length of path
@@ -1215,7 +1214,7 @@ function sweep_twist(path, loop, k, s=0, i=0, m, t=[0,0,1]) = loop==false ? s*36
   sweep_twist(path, loop, k, s, i+1, i==0 ? m3_ident() : m*m3_rotate(tt, t), tt);
 
 // subroutine to determine the initial rotation
-function sweep_init(t) = m3_rotate(t[0]==0 && t[1]<0 && t[2]==0 ? [0,1,0] : [0,-1,0]);
+function sweep_init(t) = m3_rotate(t[0]==0 && t[1]<0 && t[2]==0 ? [0,1,0] : [0,-1,0])*m3_rotate(t, [0,1,0]);
 
 // ====================================================================
 // 2D areas
@@ -1919,7 +1918,7 @@ module bottle_lugs(d, pitch=1, w=[1.2,0.8], b=0, a=0, n=4, cap=false, gap=0) {
   w1 = opt(w, 1);
   bb = cap ? b-sqrt(3)*(w0-0.05)*w1/w0+0.1 : b;
   n = max(2, n); // at least 2
-  h0 = cap ? pitch*w1*2.8/(PI*d) : 0;
+  h0 = cap ? pitch*w1*2.8/(PI*d) : 1e-3;
   h1 = pitch*(1/(n*2)-(cap?2.1:1.1)/(PI*d));
   bottle_thread(d=d, pitch=pitch, h=[h0,h1], w=w, b=bb, a=a+360*bb/pitch, n=n, cap=cap, gap=gap) children();
 }
