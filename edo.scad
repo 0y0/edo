@@ -510,7 +510,7 @@ function fit2d(points, dm=[50,50], prop=true, center=true) =
   let(sx=prop||dx==0?rr:rx, sy=prop||dy==0?rr:ry) center2d([for (p=points) [p[0]*px*sx,p[1]*py*sy]], enable=center);
 
 // spin 2D points counterclockwise about origin (with right-angle optimization)
-function spin2d(points, a=90) = let(aa=a%360)
+function spin2d(points, a=90) = a==0 ? points : let(aa=a%360)
   aa==90 || aa==-270 ? [for (p=points) [-p[1],p[0]]] :
   aa==180 || aa==-180 ? [for (p=points) [-p[0],-p[1]]] :
   aa==270 || aa==-90 ? [for (p=points) [p[1],-p[0]]] :
@@ -1475,22 +1475,24 @@ module wire_hull(v, t=1, limit=1.05, range=0, smooth=true) {
   if (smooth) clone_at(v) sphere(d=t);
 }
 
-// wheel-throwing a profile: t=thickness, shift=profile offset, a=angle range, vase=close bottom
-module throw(profile, t=1, shift=[0,0], a=[0,360], vase=false) {
+// wheel-throwing a profile: t=thickness, shift=profile offset, a=angle range, spin=2d spin, vase=close bottom
+module throw(profile, t=1, shift=[0,0], a=[0,360], spin=0, vase=false) {
+  p = spin2d(profile, spin);
   shift = is_list(shift) ? shift : [shift,0];
-  b = shift2d(box2d(profile, t/2), shift);
-  c = shift2d(profile, shift);
+  b = shift2d(box2d(p, t/2), shift);
+  c = shift2d(p, shift);
   rotate([0,0,min(a)]) rotate_extrude(angle=abs(a[1]-a[0]), convexity=9) intersection() {
     line2d(vase ? prepend(c, [0,c[0][1]]) : c, inflate=t/2);
     polygon([[0,b[0][1]],b[1],b[2],[0,b[2][1]]], convexity=9);
   }
 }
 
-// create a lathe from a profile: shift=profile offset, a=angle range, inflate=thicken, fill=center-filled
-module lathe(profile, shift=[0,0], a=[0,360], inflate=0, fill=true) {
+// create a lathe from a profile: shift=profile offset, a=angle range, spin=2d spin, inflate=thicken, fill=center-filled
+module lathe(profile, shift=[0,0], a=[0,360], spin=0, inflate=0, fill=true) {
+  p = spin2d(profile, spin);
   shift = is_list(shift) ? shift : [shift,0];
-  b = shift2d(box2d(profile, inflate), shift);
-  c = shift2d(profile, shift);
+  b = shift2d(box2d(p, inflate), shift);
+  c = shift2d(p, shift);
   rotate([0,0,min(a)]) rotate_extrude(angle=abs(a[1]-a[0]), convexity=9) intersection() {
     offset(inflate) polygon(fill ? concat([[0,c[0][1]]], c, [[0,c[len(c)-1][1]]]) :  c, convexity=9);
     polygon([[0,b[0][1]],b[1],b[2],[0,b[2][1]]], convexity=9);
