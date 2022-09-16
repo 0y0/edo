@@ -138,6 +138,9 @@ function range(span) = [span[0]:(span[1]-span[0])/span[2]:span[1]+0.0001];
 // set end=1 to produce a closed range [0,max] (0.9999 means not closed), use max to scale the results
 function quanta(parts=100, start=0, end=0.9999, max=1) = parts<1 ? [] : let(s=round2(start,3), e=round2(end,3), d=(e-s)/parts) [((s-start)%1==0?s:s+d)*max:d*max:((e-end)%1==0?e+d/2:end)*max];
 
+// return a lookup table of n points for parametric function fn between [0,1] inclusive
+function scaler(fn, n) = n<2 ? [] : [let(k=n-1) for (i=[0:k]) let(t=i/k) [t,fn(t)]];
+
 // cycle through a list of colors, randomly if seed is given
 function palette(i, seed) = let(c=["red","green","blue","brown","white","purple","yellow","pink","cyan","black","orange"], k=len(c), m=mod(i,k)) seed ? c[floor(rnd(0,k,m+1,seed)[m])] : c[m];
 
@@ -155,7 +158,7 @@ function resolve(schema) = is_function(schema) ? [for (t=schema()) schema(t)] : 
 function locus(fn, n=10, close=true, reverse=false, arg=undef) = [for (i=reverse?[n:-1:(close?0:1)]:[0:(close?n:n-1)]) arg==undef ? fn(i/n) : fn(i/n, arg)];
 
 // graph a unit parametric function {fn:t->y} in n equal steps as {[t,y]}, close=include final point
-function graph(fn, n=10, scaler=[1,1], close=true, reverse=false, arg=undef) = [let (s0=opt(scaler, 0, 1), s1=opt(scaler, 1, 1)) for (i=reverse?[n:-1:(close?0:1)]:[0:(close?n:n-1)]) let(t=i/n) [t*s0,(arg==undef?fn(t):fn(t, arg))*s1]];
+function graph(fn, n=10, scale=[1,1], close=true, reverse=false, arg=undef) = [let (s0=opt(scale, 0, 1), s1=opt(scale, 1, 1)) for (i=reverse?[n:-1:(close?0:1)]:[0:(close?n:n-1)]) let(t=i/n) [t*s0,(arg==undef?fn(t):fn(t, arg))*s1]];
 
 // generate a new parametric function which is product of two parametric functions
 fxf = function(fn1, fn2) function(t) fn1(t)*fn2(t);
@@ -1135,17 +1138,21 @@ function rectify_layers(layers, invert=false) = let(k=len(layers)) k<2 || len(la
 // convert layers to slope lines and vice versa, d=dilution, s=twist
 function isomesh(layers, d=1, s=0) = let(n=len(layers[0])) [for (i=[0:d:n-1]) [for (j=[0:len(layers)-1]) layers[j][round(i+n+j*s)%n]]];
 
-// morph linearly between 2 profiles (2D or 3D) of same cardinal, with t in [0,1), f = scaling factor
+// ====================================================================
+// morph functions
+// ====================================================================
+
+// morph linearly between 2 profiles (2D or 3D) of same cardinal at t between [0,1], f=scaling factor
 function morph(p1, p2, t, f=1) = p1==p2 && f==1 ? p1 : [for (i=[0:len(p1)-1]) let(a=p1[i], b=p2[i]*f) a+(b-a)*t];
 
 // interpolate layers by morphing between 2 profiles (2D or 3D) vertically, h=height, n=samples, s=cyclic offset
-// scaler=optional scaling function [[a,b],...] where a=scaling factor, b=proportion in [0,1)
+// optional scaler=[[t,f],...] where t=proportion in [0,1], f=scaling factor
 // result is a set of layers ready for layered_block() <<deprecated in preference to morph_smooth()>>
 function morph_between(p1, p2, h, scaler, n, s=0, z=0, end=1, curved=true) = 
   let(n=(n!=undef?n:max(len(p1),len(p2))), q1=cyclic(resample(p1, n), s), q2=resample(p2, n))
   scaler==undef ?
-  [for (t=quanta(ceil(abs(h)/2/$fs), end=end)) ascend3d(morph(q1, q2, t, curved?t:1), t*h+z)] :
-  [for (g=scaler) ascend3d(morph(q1, q2, g[1])*g[0], g[1]*h+z)];
+    [for (t=quanta(ceil(abs(h)/2/$fs), end=end)) ascend3d(morph(q1, q2, t, curved?t:1), t*h+z)] :
+    [for (f=scaler) ascend3d(morph(q1, q2, f[0])*f[1], f[0]*h+z)];
 
 // interpolate layers by morphing along a series of profiles (2D or 3D) vertically with given intervals
 // result is a set of layers ready for layered_block() <<deprecated in preference to morph_smooth()>>
@@ -1314,7 +1321,7 @@ module pyramind(profile, h=5, inset=3, scale=0, origin) {
 // trace a thread along profile (negatively if children exists), r=tapering ratio (snap to points)
 module trace(profile, d=0.2, r=0, loop=false, fuse=true) {
   p = force3d(fuse ? fuse(profile, loop=loop) : profile);
-  s = r>0 ? [for (t=quanta(len(profile)-1, end=1)) [scale_guide(t, r),t]] : undef;
+  s = r>0 ? [for (t=quanta(len(profile)-1, end=1)) [t,scale_guide(t, r)]] : undef;
   difference() {
     if ($children) children();
     sweep(ring_path(d), path=p, scaler=s, loop=loop);
@@ -2229,7 +2236,7 @@ module plot_slopes(layers, d=0.2, color, dup=false) {
   for (k=isomesh(layers)) plot(k, d=d, loop=false, color=color, dup=dup);
 }
 
-// sweep a profile along 3D path, scaler=[[f,t],...] where f=scaling factor, t=proportion in [0,1], s=twist
+// sweep a profile along 3D path, scaler=[[t,f],...] where t=proportion in [0,1], f=scaling factor, s=twist
 module sweep(profile, path, scaler, s=0, loop=false) {
   if (profile==undef || path==undef)
     debug("Error: sweep() - profile and path parameters required");
@@ -2240,7 +2247,7 @@ module sweep(profile, path, scaler, s=0, loop=false) {
     else if (scaler==undef)
       layered_block(sweep_profile(profile, p, loop=loop, s=s), loop=loop);
     else {
-      layers = [for (f=scaler) profile*f[0]];
+      layers = [for (i=quanta(len(p)-1, end=1)) profile*lookup(i, scaler)];
       layered_block(sweep_layers(layers, p, loop=loop, s=s), loop=loop);
     }
   }
@@ -2744,23 +2751,23 @@ module morph_dome(p1, p2, h, guide, s=0, inner=2) {
   hi = h - inner/2;
   guide = (guide!=undef?guide:round_path(h, a=[0,90])/h);
   layered_block(concat(
-        [for (g=reverse(guide)) force3d(offset2d(morph(q1, q2, g[1])*g[0], -inner), g[1]*hi)],
-        [for (g=guide) force3d(morph(q1, q2, g[1])*g[0], g[1]*h)]
-        ));
+    [for (g=reverse(guide)) force3d(offset2d(morph(q1, q2, g[1])*g[0], -inner), g[1]*hi)],
+    [for (g=guide) force3d(morph(q1, q2, g[1])*g[0], g[1]*h)]
+  ));
 }
 
 // extrude a tray morphing from p1 to p2, with height h and cyclic adjustment s
 // guide is a 2D curve of control points, with each coordinate within the [0,1] range
-module morph_tray(p1, p2, h, guide, s=0, inner=0.9) {
+module morph_tray(p1, p2, h, guide, s=0, inner=2) {
   n = max(len(p1), len(p2));
   q1 = cyclic(resample(p1, n), s);
   q2 = resample(p2, n);
   hi = h - inner;
   guide = (guide!=undef?guide:[for (t=quanta(_fn(h), end=1)) [1,t]]);
   layered_block(concat(
-        [for (g=(guide)) force3d(morph(q1, q2, g[1])*g[0], g[1]*h)],
-        [for (g=reverse(guide)) force3d(offset2d(morph(q1, q2, g[1])*g[0], -inner), g[1]*hi+inner)]
-        ));
+    [for (g=(guide)) force3d(morph(q1, q2, g[1])*g[0], g[1]*h)],
+    [for (g=reverse(guide)) force3d(offset2d(morph(q1, q2, g[1])*g[0], -inner), g[1]*hi+inner)]
+  ));
 }
 
 // extrude a vase morphing from p1 to p2, with height h and cyclic adjustment s
@@ -2772,9 +2779,9 @@ module morph_vase(p1, p2, h, guide, s=0, inner=2, tidy=0) {
   hi = h - inner/2;
   guide = (guide!=undef?guide:subarray(round_path(h, a=[90,0]), 1)/h);
   layered_block(concat(
-        [for (g=snip(reverse(guide))) force3d(morph(q1, q2, g[1])*(1.5-g[0]), g[1]*h)],
-        [for (g=guide) force3d(offset2d(morph(q1, q2, g[1])*(1.5-g[0]), -inner, tidy=tidy), g[1]*hi+inner)]
-        ));
+    [for (g=snip(reverse(guide))) force3d(morph(q1, q2, g[1])*(1.5-g[0]), g[1]*h)],
+    [for (g=guide) force3d(offset2d(morph(q1, q2, g[1])*(1.5-g[0]), -inner, tidy=tidy), g[1]*hi+inner)]
+  ));
 }
 
 // create a complete case by morphing upward from profile p1 to p2, along the guide curve
@@ -2787,7 +2794,7 @@ module morph_case(p1, p2, h, guide, cut=0.5, s=0, j=5, inner=0.95, visible=true)
   gap = 0.4/h;
   w = box2dw(p1)+5;
 
-// lower part
+  // bin
   h1 = frame2d(guide, 0, 1, 0, cut);
   h2 = frame2d(guide*inner, 0, 1, cut, cut+j/h);
   e1 = last(h1);
@@ -2796,7 +2803,7 @@ module morph_case(p1, p2, h, guide, cut=0.5, s=0, j=5, inner=0.95, visible=true)
   g1 = concat(h1, [[h2[0][0], e1[1]]], shift2d(h2, [-gap,0]), [[h3[0][0], e2[1]]], h3);
   if (visible) translate([w/2,0,0]) morph_extrude(p1, p2, h, g1);
 
-// upper part
+  // lid
   h4 = reverse(frame2d(guide, 0, 1, cut, 1));
   h5 = frame2d(guide*inner, 0, 1, cut, 1);
   g2 = concat(h4, [e1, [h2[0][0], e1[1]]], h5);
@@ -2804,8 +2811,6 @@ module morph_case(p1, p2, h, guide, cut=0.5, s=0, j=5, inner=0.95, visible=true)
     if (visible) morph_extrude(p1, p2, h, reverse(g2));
     children();
   }
-
-//rnd_color(1) { *plot(guide*20); plot(g1*20); *plot(g2*20); }
 }
 
 // ====================================================================
