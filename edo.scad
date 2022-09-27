@@ -755,7 +755,7 @@ function hump_path(d=10, n=12, f=0.2) = radiate2d([for (t=quanta(ceil(_fn3(PI*d/
 function heart_path(d=10) = [for (t=quanta(_fn(d/2))) let(s=abs(2*t-1), r=0.7*d*(s*s*s-7*s*s+10*s)/(5-pow(s,12))) [r*cos(360*t)-d/5,r*sin(360*t)]];
 function poly_path(d=10, n=5) = [for (t=quanta(n)) let(a=180/n+360*t) [cos(a),sin(a)]*d/2];
 function star_path(d=10, n=5, f=4) = [for (i=[0:n*2-1]) let(a=180/n+180*i/n) [cos(a),sin(a)]*d/(i%2?f:2)];
-function wave_path(d=10, n=7, f=5) = [for (t=quanta(_fn(d*n)*2)) let(a=360*t) [cos(a),sin(a)]*(d/2-d*f/50+cos(180+n*a)*d*f/50)];
+function wave_path(d=10, n=7, f=5, b=0) = [for (t=quanta(_fn(d*n)*2)) let(a=360*t) [cos(a),sin(a)]*(d/2-d*f/50+(cos(180+n*a)+b*sin(n*a*2-90))*d*f/50)];
 function butterfly_path(d=10) = let(n=_fn(d/2)*2) [for (i=[0:n-1]) butterfly_trace(i/n)*d];
 function egg_path(d=10) = let(n=_fn(d/2)) [for (i=[0:n-1]) egg_trace(i/n)*d];
 function box_path(w=10, d) = let(d=ifundef(d,w)) [for (t=quanta(_fn(min(w,d)/16)*8)) box_trace(t, [w,d], true)];
@@ -1762,11 +1762,12 @@ module shaft(locs=[[0,0]], zz=[-0.01,10], m=3, h, t, g=0, debug) {
 }
 
 // make a hole shaped by profile in a list of locations, zz=[min,max] height range, e=clean cut allowance
-module oust(profile, zz=[-10,10], locs=[[0,0]], e=0.01, enable=true, debug=false) {
+module oust(profile, locs=[[0,0]], zz=[-10,10], radiate=1, e=0.01, enable=true, debug=false) {
   zz = zz[1]?zz:[0,zz?zz:10];
   if (enable && profile != undef) difference() {
     children();
-    for (p=locs) translate([p[0],p[1],min(zz[0],zz[1])-e]) highlight(debug) solid(profile, h=abs(zz[1]-zz[0])+e*2);
+    highlight(debug) radiate(radiate) for (p=locs) 
+      translate([p[0],p[1],min(zz[0],zz[1])-e]) solid(profile, h=abs(zz[1]-zz[0])+e*2);
   }
 }
 
@@ -2631,7 +2632,7 @@ module fillet_tray(profile, h=20, t=1.6, r, bottom=true, flat=true) {
     hh = flat ? abs(h) : abs(h)-tt/2;
     g = concat2d([r==0 ? [tt,0] : ccw_path([0,-rr], [rr,0], po=[0,0]),
       if (rr<hh-0.01) [0,hh-(r==0?0:rr)],
-      flat ? [-tt,0] : ccw_path([tt,0], [0,0], po=[tt/2,0]),
+      flat ? [-tt,0] : ccw_path([tt,0], [0,0], po=[tt/2,0], $fs=$fs/2),
       if (rr<hh-0.01) [0,-hh+rr], cw_path([rr-tt,0], [0,tt-rr], po=[0,0])], [t<0?-rr:tt-rr,0]);
     layered_block([for (i=g) force3d(offset2d(profile, i[0]), i[1])], loop=!bottom);
     ascend(bottom?tt-0.01:0) children(); // allow union
