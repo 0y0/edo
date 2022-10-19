@@ -9,14 +9,14 @@ debug(str("OpenSCAD ", version()[0], ".", version()[1], ".", version()[2]), colo
 $fa = 0+3;
 $fs = 0+0.3;
 
-// additional global constants
+// library constants
 $inf = 1/0; // infinity
-$debug = false;
+$font = "Hiragino Maru Gothic ProN"; // default font
+$debug = false; // enable debug messages
 
-// $BATCH is a boolean marker defined only from command line in batch-mode
-$BATCH=false;
-// $NOW is current timestamp defined only from command line for batch-mode logging
-$NOW=undef;
+// for command line executions only
+$BATCH = false; // executing from command line
+$NOW = undef; // execution timestamp
 
 // ====================================================================
 // math functions
@@ -1567,7 +1567,7 @@ module spring(m, pitch=5, h=10, w=2, a=0, clip=true) {
 }
 
 // 3D text label at point p with height h, size limited by xsize and ysize, optional inflation and centering
-module label(txt, p=[0,0,0], xsize=0, ysize=0, h=1, inflate=0, center=false, dir="ltr", font="Hiragino Maru Gothic ProN", sf=0.5) {
+module label(txt, p=[0,0,0], xsize=0, ysize=0, h=1, inflate=0, center=false, dir="ltr", font=$font, sf=0.5) {
   txt = is_list(txt) ? txt : [txt];
   n = len(txt);
   th = ysize / (n+(n-1)*sf); // text height
@@ -1576,12 +1576,9 @@ module label(txt, p=[0,0,0], xsize=0, ysize=0, h=1, inflate=0, center=false, dir
     linear_extrude(h, convexity=10) offset(inflate) resize([xsize,th]*0.99, auto=true)
     text(txt[i], halign=center||xsize>0?"center":"left", valign=n==1?(center?"center":"bottom"):"top", direction=dir, font=font);
 }
-//module label(txt, p=[0,0,0], xsize=0, ysize=0, h=1, inflate=0, center=false, dir="ltr", font="Hiragino Maru Gothic ProN") {
-//  translate(p) linear_extrude(h, convexity=10) offset(inflate) resize([xsize,ysize], auto=true) text(txt, halign=center?"center":"left", valign=center?"center":"bottom", direction=dir, font=font);
-//}
 
 // a text-displaying signboard, ysize is auto if zero, d=text depth, passes $dm=[x,y,h,d,r,margin] to children
-module signboard(txt, xsize=50, ysize=0, h=3, d=1, inflate=0.1, center=true, dir="ltr", font="Hiragino Maru Gothic ProN", r, margin) {
+module signboard(txt, xsize=50, ysize=0, h=3, d=1, inflate=0.1, center=true, dir="ltr", font=$font, r, margin) {
   k = len(txt);
   m = margin!=undef ? margin : (k==0 ? 0 : k<3 ? xsize/5 : xsize/(k*2));
   x = xsize>0 ? max(0, xsize-m*2) : 50;
