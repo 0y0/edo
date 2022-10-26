@@ -374,7 +374,7 @@ function uniform(path, f=$fs, loop=true) = f==0 ? path : coarse(refine(path, ds=
 // soften a path by replacing each sharp corner with an arc of radius no greater than r
 function soften(path, r=5, loop=true, i=0, m, pp) = r==0 ? path :
   let(p=i==0 && loop ? concat([path[len(path)-1]], path, [path[0]]) : path)
-  let(m=ifundef(m, len(p)), pp=ifundef(pp, loop ? [] : [p[0]])) i==m-2 ? loop ? snip(pp, 1) : concat(pp, [p[m-1]]) :
+  let(m=ifundef(m, len(p)), pp=ifundef(pp, loop ? [] : [p[0]])) i==m-2 ? loop ? pp : concat(pp, [p[m-1]]) :
   let(o=p[i+1], u=p[i]-o, v=p[i+2]-o, mu=norm(u), mv=norm(v), du=u/mu, dv=v/mv, c2=du*dv, t=sqrt((1-c2)/(1+c2)))
   let(a=min([mu/2,mv/2,r/t]), f=o+a*du, g=o+a*dv, c=o+norm([a,min([r,a*t])])*unit(du+dv), e=cross(u,v))
   soften(p, r, loop, i+1, m, concat(pp, abs(e)<1 || a<=0 || mu+mv<$fs ? [o] : e<0 ? ccw_path(f, g, po=c) : cw_path(f, g, po=c)));
@@ -958,12 +958,11 @@ function invert3d(layers, h) = [for (p=layers) [for (i=[len(p)-1:-1:0]) [p[i][0]
 // reflect points vertically across xy-plane
 function reflect3d(points) = [for (p=points) [p[0],p[1],-p[2]]];
 
-// orient 3D points on xy-plane (normal=[0,0,1]) to new normal vector n, with uniform rotation d about n
-//function orient3d(points, n, from=[0,0,1], d=0) = let(r=m3_spin(d), a=-angle3d(from,n), c=cross(from,n)) [for (p=points) (d==0?p:p*r)*m3_revolve(a, c)];
+// orient 3D points on xy-plane (normal=[0,0,1]) to new normal vector n, with uniform rotation a about n
 function orient3d(points, n, from=[0,0,1], a=0) = points * m3_spin(a) * m3_rotate(n, from);
 
-// wrap points on xy-plane around a vertical cylinder of diameter d, spanning angle a
-function polar3d(points, d=20, a=360) = let(w=box2dw(points), r=d/2) [for (p=points) let(t=p[0]*a/w, e=ifundef(p[2],0)) [cos(t)*(r+e), sin(t)*(r+e), p[1]*(d*PI*a)/(w*360)]];
+// wrap points on xy-plane around a vertical cylinder of diameter d, spanning angle a, reference width w
+function polar3d(points, d=20, a=360, w) = let(w=ifundef(w, box2dw(points)), r=d/2) [for (p=points) let(t=p[0]*a/w, e=ifundef(p[2],0)) [cos(t)*(r+e), sin(t)*(r+e), p[1]*(d*PI*a)/(w*360)]];
 
 // scale 2D points onto the surface of a sphere linearly with respect to origin
 function land(points, r) = [for (p=points) unit(p)*r];
