@@ -377,7 +377,7 @@ function soften(path, r=5, loop=true, i=0, m, pp) = r==0 ? path :
   let(m=ifundef(m, len(p)), pp=ifundef(pp, loop ? [] : [p[0]])) i==m-2 ? loop ? pp : concat(pp, [p[m-1]]) :
   let(o=p[i+1], u=p[i]-o, v=p[i+2]-o, mu=norm(u), mv=norm(v), du=u/mu, dv=v/mv, c2=du*dv, t=sqrt((1-c2)/(1+c2)))
   let(a=min([mu/2,mv/2,r/t]), f=o+a*du, g=o+a*dv, c=o+norm([a,min([r,a*t])])*unit(du+dv), e=cross(u,v))
-  soften(p, r, loop, i+1, m, concat(pp, abs(e)<1 || a<=0 || mu+mv<$fs ? [o] : e<0 ? ccw_path(f, g, po=c) : cw_path(f, g, po=c)));
+  soften(p, r, loop, i+1, m, concat(pp, abs(e)<1 || mu+mv<=$fs ? [o] : e<0 ? ccw_path(f, g, po=c) : cw_path(f, g, po=c)));
 
 // wobble a path's x and y coordinates wrt origin
 function wobble(path, by=0.03, n=32) = [for (p=path) let(t=1+cos(n*atan2(p[1], p[0]))*by) has(p[2]) ? [p[0]*t, p[1]*t, p[2]] : p*t];
@@ -552,12 +552,12 @@ function random2d(n, min=-1, max=1, seed) = let(s=rnd_seed(seed)) [for (i=[1:n])
 function wander2d(n, min=-1, max=1, seed, trail=[[0,0]], base=[0,0]) = n>0 ? let(s=rnd_seed(seed)) wander2d(n-1, min, max, s, concat(trail, [trail[len(trail)-1]+rnd(min, max, 2, n+s/n)+base]), base) : trail;
 
 // a random profile, d=diameter, min/max=number of corners, f=resolution, s=softness
-function random_profile(d=50, min=4, max=7, f=1, s=5, seed) = let(r=rnd_seed(seed))
+function random_profile(d=50, min=4, max=7, s=5, seed) = let(r=rnd_seed(seed))
   let(w=shake2d(poly_path(d/2, min+rndi(0, max-min+1, seed=r)), d/(s+1), seed=9999-r))
-  fit2d(uniform(soften(w, s, loop=true), f, loop=true), d);
+  fit2d(uniform(soften(w, s, loop=true), loop=true), d);
 
 // generate a path by rotating a shorter one n times around the origin
-function radiate2d(path, n, i=1) = i<n ? concat([let(r=m2_rotate(360/n*i)) for (p=path) p*r], radiate2d(path, n, i+1)) : path;
+function radiate2d(path, n, i=0) = concat(i==0 ? path : path*m2_rotate(360/n*i), i<n-1 ? radiate2d(path, n, i+1) : []);
 
 // combine a list of 2D paths end-to-end, a single point in the list is a vector, from=override first point
 function concat2d(paths=[], from, i=0) = let(s=paths[i]) s[0]==undef ? [] : let(p=is_list(s[0])?s:[[0,0],s], d=ifundef(from, p[0])-p[0], k=len(p)) concat([for (i=[(i==0?0:1):k-1]) p[i]+d], concat2d(paths, p[k-1]+d, i+1));
@@ -588,7 +588,7 @@ function cut2d(s1, s2, e=0) = let(r=s1[1]-s1[0], s=s2[1]-s2[0], c=r && s ? cross
 
 // preserving vertices, align the starting point of profile to where dimension d changes sign (0=x, 1=y)
 // note that a profile not changing sign in dimension d will fail
-function refit2d(profile, d=1) = let(k=len(profile), j=[for (i=[k-1:-1:0]) let(q1=profile[i][d], q2=profile[(i+1)%k][d]) if (q1==0 || (q1<0 && q2>=0)) i][0]) cyclic(profile, abs(profile[j][d])>abs(profile[(j+1)%k][d])? (j+1)%k : j);
+function refit2d(profile, d=1) = let(k=len(profile), j=[for (i=[k-1:-1:0]) let(q1=profile[i][d], q2=profile[(i+1)%k][d]) if (q1<0 && q2>=0) i][0]) cyclic(profile, abs(profile[j][d])>abs(profile[(j+1)%k][d])? (j+1)%k : j);
 
 // check if profile is strictly convex
 function convex2d(profile, f=0.001, i=0, k) = let(k=ifundef(k, len(profile))) i<k ? let(p0=profile[(i+k-1)%k], p1=profile[i], p2=profile[(i+1)%k]) convex2d(profile, f, i+1, k) && cross(unit(p2-p1), unit(p0-p1))>-f : true;
@@ -1012,20 +1012,19 @@ function hilbert3(s, u=1, v=[0,0,0], d1=[1,0,0], d2=[0,1,0], d3=[0,0,1]) = (u==0
   );
 
 // ====================================================================
-// matrix operations (rotations are counter-clockwise)
+// matrix transformations (rotations are counter-clockwise)
 // ====================================================================
 
+// 2x2 matrix (left to right order), e.g. [[1,2]]*m2_rotate(45) or points*m1*m2*m3
+
 function m2_scale(s=[1,1]) = [[s[0],0],[0,s[1]]];
+function m2_rotate(a) = [[cos(a),sin(a)],[-sin(a),cos(a)]];
 
-function m2_rotate(d) = [[cos(d),sin(d)],[-sin(d),cos(d)]];
-
-function m3_xprod(v) = [[0,-v[2],v[1]],[v[2],0,-v[0]],[-v[1],v[0],0]];
-
-function m3_tensor(u, v) = [[u[0]*v[0],u[0]*v[1],u[0]*v[2]], [u[1]*v[0],u[1]*v[1],u[1]*v[2]], [u[2]*v[0],u[2]*v[1],u[2]*v[2]]];
-
-// various rotations using a 3x3 matrix (left to right order), e.g. [[1,2,3]]*m3_spin(45) or points*m1*m2*m3
+// 3x3 matrix (left to right order), e.g. [[1,2,3]]*m3_spin(45) or points*m1*m2*m3
 
 function m3_ident(k=1) = [[k,0,0],[0,k,0],[0,0,k]];
+function m3_xprod(v) = [[0,-v[2],v[1]],[v[2],0,-v[0]],[-v[1],v[0],0]];
+function m3_tensor(u, v) = [[u[0]*v[0],u[0]*v[1],u[0]*v[2]], [u[1]*v[0],u[1]*v[1],u[1]*v[2]], [u[2]*v[0],u[2]*v[1],u[2]*v[2]]];
 function m3_revolve(a, n) = let(u=n/norm(n)) m3_ident(cos(a)) + m3_xprod(u)*sin(a) + m3_tensor(u, u)*(1-cos(a));
 function m3_spin(a) = [[cos(a),sin(a),0],[-sin(a),cos(a),0],[0,0,1]]; // around z-axis
 function m3_negate(b) = let(b=ifundef(b, [0,0,1]), f=orth(b), v=cross(f, b)) m3_rotate(v, f, b)*m3_rotate(-f, v, b);
