@@ -657,12 +657,12 @@ function tidy2d(p, r, loop=false, lean=false, e=0.001) = r==0 ? p : let(k=len(p)
 
 // return a profile keeping distance d away from the given profile, tidy=optional radius for cleanup
 // note that number of points on the resulting profile will be different from the original
-function escort2d(profile, d=1, loop=false, tidy, i=0, m, e, p) = d==0 ? profile :
-  let(m=ifundef(m, len(profile))) i==(loop ? m+1 : m) ? tidy2d(p, tidy, loop=loop, lean=true) :
-  let(p1=profile[(i+m-1)%m], p2=profile[i%m], u=unit([p2[1]-p1[1],p1[0]-p2[0]])*d)
-  let(v1=p1+u, v2=p2+u, n=(loop&&i==1)||e&&norm(e[1]-v1)>$fs/2, v=e?abs(d)*unit((e[1]+v1)/2-p1)+p1:undef)
-  let(pp=i==0 ? [] : concat(p, [if (n&&(loop||i>1)) v], [if (n||i==1) v1, v2]))
-  escort2d(profile, d, loop, tidy, i+1, m, [v1,v2], pp);
+function escort2d(profile, d=1, loop=false, /*private*/ i=0, k, q) = d==0 ? profile :
+  let(k=k?k:len(profile), p0=profile[(i+k-1)%k], p1=profile[i%k], p2=profile[(i+1)%k])
+  let(d0=d*unit([p1[1]-p0[1],p0[0]-p1[0]]), d1=d*unit([p2[1]-p1[1],p1[0]-p2[0]]))
+  let(q0=p1+d0, q1=p1+d1, c=cross(unit(p0-p1), unit(p2-p1)), e=loop?k+1:k-1)
+  let(s=i==0?[if(!loop)q1]:i==e?[]:let(u=proj3(d1,p2-p1,d0)+proj3(d0,p0-p1,d1))sign(c)==sign(d)&&norm(u)<7*abs(d)?[p1+u]:norm(q0-q1)<$fs?[(q0+q1)/2]:c<0?ccw_path(q0,q1,po=p1):cw_path(q0,q1,po=p1))
+  concat(s, i==e?[if(!loop)q0]:escort2d(profile, d, loop, i+1, k, q));
 
 // inflate/deflate (offset) a profile (does not work well in some cases) [private: i, m, e, p]
 // it's different from escort2d() because it always assumes a loop and preserves number of points in the original
@@ -674,12 +674,12 @@ function offset2d(profile, d=1, f=3, tidy=50, i=0, m, e, p) = d==0 ? profile :
 // produce a profile surrounding path, t=thickness, rounded=circular ends (loop=true causes a hack to create a "hole")
 function fence2d(path, t=1, rounded=true, s=0, loop=false, tidy) = len(path)<2 ? [] :
   let(p=rectify(path), rounded=(rounded && t>$fs), s=min(s, t/2))
-  let(b1=escort2d(p, t/2, tidy=0, loop=loop), b2=escort2d(p, -t/2, tidy=0, loop=loop))
-  let(s1=close_loop(soften(tidy2d(b1, tidy, lean=true), s, loop=loop), loop))
-  let(s2=close_loop(reverse(soften(tidy2d(b2, tidy, lean=true), s, loop=loop), loop=loop), loop))
+  let(b1=escort2d(p, t/2, loop=loop), b2=escort2d(p, -t/2, loop=loop))
+  let(s1=close_loop(soften(b1, s, loop=loop), loop))
+  let(s2=close_loop(reverse(soften(b2, s, loop=loop), loop=loop), loop))
   let(e1=!loop && rounded ? subarray(ccw_path(last(s2), s1[0], po=p[0]), 1, -2) : [])
   let(e2=!loop && rounded ? subarray(ccw_path(last(s1), s2[0], po=last(p)), 1, -2) : [])
-  concat(s1, e2, s2, e1);
+  tidy2d(concat(s1, e2, s2, e1), (loop&&tidy==undef)?0:tidy, lean=true);
 
 // produce a scaled profile by shifting each point a constant distance away from origin (see also scale2d, offset2d)
 function expand2d(profile, by) = [for (p=profile) let(n=norm(force2d(p)),s=(n+by)/n) p[2]==undef ? p*s : [p[0]*s,p[1]*s,p[2]]];
