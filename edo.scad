@@ -1857,7 +1857,7 @@ module screw_thread(m=3, pitch=0.5, h=[0,10], b=[0,0], gap=0, open=0, taper=true
   td = v*p*sqrt(3)/2; // depth of thread
   ppr = _fn(m/2); // points per revolution
   r = td/(p/2);
-  margin = 0.02;
+  margin = 0.1;
   xsec = [[-margin,0,0.75*td/r], [td*5/8,0,p/16], [td*5/8,0,-p/16], [-margin,0,-0.75*td/r]];
   mesh = [for (t=quanta(ppr*bb/p, end=1.01)) let(a=t*bb*360/p+(h0+b0)*360/p) shift3d(spin3d(xsec*(taper ? scale_guide(t) : 1), a), [(m/2-td*5/8-gap)*cos(a),(m/2-td*5/8-gap)*sin(a),t*bb])];
   highlight(debug) ascend(h0) intersection() {
