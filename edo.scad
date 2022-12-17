@@ -216,7 +216,7 @@ function cyclic(array, n) = n==0 ? array : [let(k=len(array)) for (i=[n:n+k-1]) 
 function repeat(e, n=2) = [for (i=[1:n]) e];
 
 // reduce rank of an array by promoting second-level elements to top, i.e. [[a,b],[c]] to [a,b,c]
-function flatten(array) = [for (i=[0:len(array)-1]) each array[i]];
+function flatten(array) = [each each array];
 
 // remove a list of indices from array
 function omit(array, list=[]) = [for (i=[0:len(array)-1]) if (len(search(i, list))==0) array[i]];
@@ -1392,12 +1392,12 @@ module strip(path, h=10, t=1, r=0, f=0, s=0) {
   ascend(h/2) layered_block(m);
 }
 
-// a beam between 2 points (cross section is rectangular or circular)
+// a beam between 2 points (cross section is either rectangular or circular specified by dm or a profile)
 // dm=cross section dimensions (2D for retangle, 1D for circle), c=cap length)
-module beam(p1, p2, dm=0.5, c=0) {
+module beam(p1, p2, dm=0.5, c=0, profile) {
   a = as3d(p1);
   b = as3d(p2);
-  p = is_list(dm) ? quad_path(dm[0], dm[1]) : ring_path(dm);
+  p = profile != undef ? profile : is_list(dm) ? quad_path(dm[0], dm[1]) : ring_path(dm);
   fillet_sweep(p, [a,b], c0=c, c1=c);
 }
 
