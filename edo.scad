@@ -351,7 +351,7 @@ function subpath(path, h=0, t=0) = h==0 && t==0 ? path :
 function shorten(path, d=0, i=0) = d>0 && i<len(path) ? shorten(path, d-norm(path[i]-path[i+1]), i+1) : snip(path, i);
 
 // resample path to increase or decrease number of points to n, without preserving original points
-function resample(path, n, loop=true) = let(n=ifundef(n, len(path))) n<=0 ? path : let(q=close_loop(path, enable=loop), k=len(q), mg=mileage(q), d=len(q[0]), mp=[for (j=[0:d-1]) [for (i=[0:k-1]) [mg[i], q[i][j]]]]) [for (t=quanta(n, max=mg[k-1], end=loop?0.9999:1)) [for (s=[0:d-1]) lookup(t, mp[s])]];
+function resample(path, n, loop=true) = let(n=ifundef(n, len(path))) n<=0 ? path : let(q=close_loop(path, enable=loop), k=len(q), mg=mileage(q), d=len(q[0]), mp=[for (j=[0:d-1]) [for (i=[0:k-1]) [mg[i], q[i][j]]]]) [for (t=quanta(loop?n:n-1, max=mg[k-1], end=loop?0.9999:1)) [for (s=[0:d-1]) lookup(t, mp[s])]];
 
 // create a straight path between two points with equal-length segments shorter than or equal to ds {see ruler_path()}
 function bridge(p1, p2, ds) = let(v=p2-p1, m=ceil(norm(v)/ds)) [for (t=quanta(m)) p1+t*v];
