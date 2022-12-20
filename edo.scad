@@ -405,7 +405,7 @@ function angle_at(path, i, loop=true) = let(w=force2d(nearby(path, i, 1, loop)))
 function smooth(path, div, loop) = path==undef ? undef : div!=undef&&div<2 ? path : let(n=len(path)) n<3 ? path : n>200 ? echo(strc("smooth(): path too complex"), n=n) [] : loop || loop==undef && loopish(path) ? smooth_loop(path, div, n) : smooth_arc(path, div, n);
 
 // compute bezier curve using 4 points [begin, control1, control2, end], t in [0,1]
-function bezier(points, t) = [let(d=len(points[0])) for (i=[0:d-1]) [pow(1-t,3), 3*t*pow(1-t,2), 3*t*t*(1-t), pow(t,3)]*slice(points, i)];
+function bezier(points, t) = let(s=1-t) [s^3,3*t*s^2,3*s*t^2,t^3]*points;
 
 // --------------------------------------------
 
