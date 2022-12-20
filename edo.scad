@@ -986,14 +986,18 @@ function sunflower(n) = let(c=180*(1+sqrt(5))) [for (i=[0.5:n-0.5]) let(r=sqrt(i
 function tetra(d=10) = let(f=d/(2*sqrt(3))) [for (i=[1,-1], j=[1,-1]) f*[i,j,i*j]];
 function tetra_faces() = [[0,2,1],[0,1,3],[0,3,2],[1,2,3]];
 
-// vertices of an icosahedron enclosed by a sphere of diameter d
-function icosa(d=10) = let(phi=golden(), u=[-1,1], v=1/[phi,-phi]) [for (k=[0:2],j=u,i=v) [[i,j,0],[j,0,i],[0,i,j]][k]]*d/sqrt(1+2/(3+sqrt(5)))/2;
-function icosa_faces() = [[0,9,1],[0,1,11],[0,6,7],[0,11,6],[0,7,9],[1,5,4],[1,4,11],[1,9,5],[2,3,8],[2,10,3],
-  [2,7,6],[2,6,10],[2,8,7],[3,4,5],[3,10,4],[3,5,8],[4,10,11],[5,9,8],[6,11,10],[7,8,9]];
+// vertices of a octahedron enclosed by a sphere of diameter d
+function octa(d=10) = let(f=d/2) [[f,0,0],[0,f,0],[0,0,f],[-f,0,0],[0,-f,0],[0,0,-f]];
+function octa_faces() = [[2,1,0],[1,2,3],[4,3,2],[3,4,5],[0,5,4],[5,0,1],[4,2,0],[1,3,5]];
 
 // vertices of an dodecahedron enclosed by a sphere of diameter d
 function dodeca(d=10) = let(phi=golden(), u=[-1,1], v=1/[phi,-phi]) concat([for (i=u,j=u,k=u) [i,j,k]], [for (k=[0:2],j=v,i=v) [[0,i,1/j],[i,1/j,0],[1/j,0,i]][k]])*d/sqrt(3)/2;
 function dodeca_faces() = [[0,11,10,2,19],[0,15,14,4,11],[0,19,18,1,15],[1,18,3,8,9],[2,10,6,12,13],[2,13,3,18,19],[3,13,12,7,8],[4,14,5,16,17],[4,17,6,10,11],[5,9,8,7,16],[5,14,15,1,9],[6,17,16,7,12]];
+
+// vertices of an icosahedron enclosed by a sphere of diameter d
+function icosa(d=10) = let(phi=golden(), u=[-1,1], v=1/[phi,-phi]) [for (k=[0:2],j=u,i=v) [[i,j,0],[j,0,i],[0,i,j]][k]]*d/sqrt(1+2/(3+sqrt(5)))/2;
+function icosa_faces() = [[0,9,1],[0,1,11],[0,6,7],[0,11,6],[0,7,9],[1,5,4],[1,4,11],[1,9,5],[2,3,8],[2,10,3],
+  [2,7,6],[2,6,10],[2,8,7],[3,4,5],[3,10,4],[3,5,8],[4,10,11],[5,9,8],[6,11,10],[7,8,9]];
 
 // Hilbert cube of size s with points at least u length apart (watch out for stack overflow)
 function hilbert3(s, u=1, v=[0,0,0], d1=[1,0,0], d2=[0,1,0], d3=[0,0,1]) = (u==0 || s<=u) ? [v] : let(s=s/2, v=v
