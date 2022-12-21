@@ -290,6 +290,9 @@ function shear(array, factors) = [for (e=array) [for (i=incline(e)) e[i]*factors
 // unique pairs of all elements (when range>0 include only pairs with indices no greater than range apart)
 function pairs(array, range=0) = let(k=len(array)-1) [for (i=[0:k], j=[0:k]) if (i>j && (range==0||range>(i-j))) [array[i],array[j]]];
 
+// transpose a matrix (rank 2 array)
+function transpose(matrix) = let(m=is_list(matrix)?len(matrix):0, n=is_list(matrix[0])?len(matrix[0]):0) m==0||n==0 ? matrix : [for (j=[0:n-1]) [for (i=[0:m-1]) matrix[i][j]]];
+
 // ====================================================================
 // 3D path functions
 // ====================================================================
@@ -880,6 +883,9 @@ function swap_xz(points) = [for (p=points) [ifundef(p[2],0),p[1],p[0]]];
 // check for a valid 3D point
 function valid3d(point) = is_num(point[0]) && is_num(point[1]) && is_num(point[2]);
 
+// return span of each dimension
+function span3d(points) = [for (i=[0:2]) span(slice(points, i))];
+
 // ascend 2D or 3D points, dz=z increment {see force3d()}
 function ascend3d(points, dz=0) = [for (p=points) [is_list(p)?p[0]:p,ifundef(p[1],0),ifundef(p[2],0)+dz]];
 
@@ -915,9 +921,6 @@ function unit3d(points, origin=[0,0,0]) = [for (p=points) p / norm(p-origin)];
 
 // translate 2D or 3D points so that point i becomes the origin
 function anchor(points, i=0) = let(k=len(points), i=(i+k)%k) [for (p=points) p-points[i]];
-
-// adjust dimension(s)
-function adjust3d(points, delta=[0,0,0]) = rank(points)<2 ? points+delta : [for (p=points) p+delta];
 
 // shift 3D points
 function shift3d(points, vector) = [for (p=points) [p[0]+vector[0],p[1]+vector[1],ifundef(p[2],0)+vector[2]]];
@@ -1174,6 +1177,9 @@ function morph_cookie(profile, h, b=0, origin=[0,0], f=0) =
 // smooth vertical morphing for a series of profiles spaced with given intervals, see also fillet_sweep()
 // n=resolution, f=smoothness, d=alignment_axis (see rebase2d)
 function morph_smooth(profiles, intervals, n=200, f=7, d=1) = let(h=accum(intervals), p=[for (i=indices(profiles)) force3d(rebase2d(resample(profiles[i], n), d=d), h[i])]) isomesh([for (q=isomesh(p)) smooth(q, f, loop=false)]);
+
+// morph along a set of profiles of same cardinal in any orientation, f=resolution 
+function morph3d(profiles, f=5, loop=false) = isomesh([for (c=isomesh(profiles)) max(span3d(c)) < 2 ? repeat((c[0]+last(c))/2, loop?f*len(c):f*(len(c)-1)+1) : smooth(c, f, loop=loop)]);
 
 // ====================================================================
 // 3D sweep functions - note that they return the layers in reverse order of path for correct surface norms
