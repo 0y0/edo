@@ -1143,6 +1143,9 @@ function rectify_layers(layers, invert=false) = let(k=len(layers)) k<2 || len(la
 // convert layers to slope lines and vice versa, d=dilution, s=twist
 function isomesh(layers, d=1, s=0) = let(n=len(layers[0])) [for (i=[0:d:n-1]) [for (j=[0:len(layers)-1]) layers[j][round(i+n+j*s)%n]]];
 
+// align cardinals of layers by interpolation (snap=false) or overlapping points (snap=true)
+function saturate(layers, snap=false) = let(m=max([for (p=layers) len(p)])) [for (p=layers) let(k=len(p)) k==m ? p : [for (t=quanta(m-1, end=1, max=k-1)) snap ? p[round(t)] : let(i=floor(t)) i==k-1 ? p[i] : p[i]+(t-i)*(p[i+1]-p[i])]];
+
 // ====================================================================
 // morph functions
 // ====================================================================
@@ -1178,8 +1181,8 @@ function morph_cookie(profile, h, b=0, origin=[0,0], f=0) =
 // n=resolution, f=smoothness, d=alignment_axis (see rebase2d)
 function morph_smooth(profiles, intervals, n=200, f=7, d=1) = let(h=accum(intervals), p=[for (i=indices(profiles)) force3d(rebase2d(resample(profiles[i], n), d=d), h[i])]) isomesh([for (q=isomesh(p)) smooth(q, f, loop=false)]);
 
-// morph along a set of profiles of same cardinal in any orientation, f=resolution 
-function morph3d(profiles, f=5, loop=false) = isomesh([for (c=isomesh(profiles)) max(span3d(c)) < 2 ? repeat((c[0]+last(c))/2, loop?f*len(c):f*(len(c)-1)+1) : smooth(c, f, loop=loop)]);
+// morph along a list of 3D profiles in any orientation, f=resolution, e=threshold
+function morph3d(profiles, f=5, e=2, loop=false) = let(f=max(1,f)) isomesh([for (c=isomesh(saturate(profiles, snap=false))) max(span3d(c))<e ? repeat((c[0]+last(c))/2, loop?f*len(c):f*(len(c)-1)+1) : smooth(c, f, loop=loop)]);
 
 // ====================================================================
 // 3D sweep functions - note that they return the layers in reverse order of path for correct surface norms
