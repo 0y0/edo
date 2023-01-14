@@ -435,6 +435,11 @@ function smooth_arc(k, div, n, i=0, p1, p2) = div&&div<=1 ? k : i==n-1 ? [k[i]] 
   let(d=(div!=undef?div:ceil(path_length([for (t=quanta(8, end=1)) bezier([k[i], p1[i], p2[i], k[i+1]], t)]))))
   concat([for (t=quanta(d)) bezier([k[i], p1[i], p2[i], k[i+1]], t)], smooth_arc(k, div, n, i+1, p1, p2));
 
+// compute control points for smooth_arc() - for debug only
+function smooth_arc_cp(k) =
+  let(n=len(k), w=[for (i=[0:n-1]) max(1, norm(k[i]-k[(i+1)%n]))], p1=spline_control_points_arc(k, w, n))
+  [p1, [for (i=incline(p1)) i==len(p1)-1 ? (k[i+1]+p1[i])/2 : 2*k[i+1]-p1[i+1]]];
+
 // --------------------------------------------
 
 // subroutine used by smooth_loop() to extract calculation results
@@ -1033,6 +1038,7 @@ function m3_ident(k=1) = [[k,0,0],[0,k,0],[0,0,k]];
 function m3_xprod(v) = [[0,-v[2],v[1]],[v[2],0,-v[0]],[-v[1],v[0],0]];
 function m3_tensor(u, v) = [[u[0]*v[0],u[0]*v[1],u[0]*v[2]], [u[1]*v[0],u[1]*v[1],u[1]*v[2]], [u[2]*v[0],u[2]*v[1],u[2]*v[2]]];
 function m3_revolve(a, n) = let(u=n/norm(n)) m3_ident(cos(a)) + m3_xprod(u)*sin(a) + m3_tensor(u, u)*(1-cos(a));
+function m3_scale(s=[1,1,1]) = [[s[0],0,0], [0,s[1],0], [0,0,s[2]]];
 function m3_spin(a) = [[cos(a),sin(a),0],[-sin(a),cos(a),0],[0,0,1]]; // around z-axis
 function m3_negate(b) = let(b=ifundef(b, [0,0,1]), f=orth(b), v=cross(f, b)) m3_rotate(v, f, b)*m3_rotate(-f, v, b);
 function m3_rotate(v, from=[0,0,1], basis) = let(s=colinear(v, from)) s<0 ? m3_ident(s) :
@@ -1135,7 +1141,7 @@ function scale_layers(layers, guide) = let(k=len(layers)-1) [for (i=[0:k]) [let(
 // spin layers about z-axis based on a unit guiding path representing [layer, angle]
 function spin_layers(layers, guide, a=60) = let(k=len(layers)-1, g=ifundef(guide, [[0,0],[1,a]])) [for (i=[0:k]) spin3d(layers[i], lookup(i/k, g))];
 
-// make sure layers can be rendered by layered_block()
+// make sure layers are in correct orientation to be rendered by layered_block()
 function rectify_layers(layers, invert=false) = let(k=len(layers)) k<2 || len(layers[0])<2 ? layers :
   let(a=layers[0], b=layers[1], u=a[1]-a[0], v=a[len(a)-1]-a[0], w=b[0]-a[0])
   reverse(layers, enable=xor(sign3v(u, v, w)<0, invert));
@@ -1143,8 +1149,8 @@ function rectify_layers(layers, invert=false) = let(k=len(layers)) k<2 || len(la
 // convert layers to slope lines and vice versa, d=dilution, s=twist
 function isomesh(layers, d=1, s=0) = let(n=len(layers[0])) [for (i=[0:d:n-1]) [for (j=[0:len(layers)-1]) layers[j][round(i+n+j*s)%n]]];
 
-// align cardinals of layers by interpolation (snap=false) or overlapping points (snap=true)
-function saturate(layers, snap=false) = let(m=max([for (p=layers) len(p)])) [for (p=layers) let(k=len(p)) k==m ? p : [for (t=quanta(m-1, end=1, max=k-1)) snap ? p[round(t)] : let(i=floor(t)) i==k-1 ? p[i] : p[i]+(t-i)*(p[i+1]-p[i])]];
+// unify cardinals of layers by interpolation (dup=false) or overlapping points (dup=true)
+function saturate(layers, dup=false) = let(m=max([for (p=layers) len(p)])) [for (p=layers) let(k=len(p)) if (k>0) k==m ? p : [for (t=quanta(m-1, end=1, max=k-1)) dup ? p[round(t)] : let(i=floor(t)) i==k-1 ? p[i] : p[i]+(t-i)*(p[i+1]-p[i])]];
 
 // ====================================================================
 // morph functions
@@ -1182,7 +1188,7 @@ function morph_cookie(profile, h, b=0, origin=[0,0], f=0) =
 function morph_smooth(profiles, intervals, n=200, f=7, d=1) = let(h=accum(intervals), p=[for (i=indices(profiles)) force3d(rebase2d(resample(profiles[i], n), d=d), h[i])]) isomesh([for (q=isomesh(p)) smooth(q, f, loop=false)]);
 
 // morph along a list of 3D profiles in any orientation, f=resolution, e=threshold
-function morph3d(profiles, f=5, e=2, loop=false) = let(f=max(1,f)) isomesh([for (c=isomesh(saturate(profiles, snap=false))) max(span3d(c))<e ? repeat((c[0]+last(c))/2, loop?f*len(c):f*(len(c)-1)+1) : smooth(c, f, loop=loop)]);
+function morph3d(profiles, f=5, e=2, loop=false, dup=false) = let(f=max(1,f)) isomesh([for (c=isomesh(saturate(profiles, dup=dup))) max(span3d(c))<e ? repeat((c[0]+last(c))/2, loop?f*len(c):f*(len(c)-1)+1) : smooth(c, f, loop=loop)]);
 
 // ====================================================================
 // 3D sweep functions - note that they return the layers in reverse order of path for correct surface norms
