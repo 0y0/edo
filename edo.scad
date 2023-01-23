@@ -1411,6 +1411,12 @@ module strip(path, h=10, t=1, r=0, f=0, s=0) {
   ascend(h/2) layered_block(m);
 }
 
+// a udon noodle along path, t=thickness, c=cap length (default is t/2)
+module udon(path, t=1, c=undef, loop=false) {
+  c = ifundef(c, t/2);
+  fillet_sweep(ring_path(t), path, c0=c, c1=c, loop=loop);
+}
+
 // a beam between 2 points (cross section is either rectangular or circular specified by dm or a profile)
 // dm=cross section dimensions (2D for retangle, 1D for circle), c=cap length)
 module beam(p1, p2, dm=0.5, c=0, profile) {
@@ -2412,7 +2418,7 @@ module clip_at(points) {
 // r=radius, n=number of copies, hide=omit copies at the end
 // $index is passed to each child for their information
 module radiate(n, r=0, hide=0, spin=0) {
-  if (n>0) {
+  if (n-hide>0) {
     p = is_list(r) ? len(r) == 3 ? r : undef : [r,0,0];
     for (i=[0:n-hide-1]) rotate(360*i/n+spin) translate(p) { $index=i; children(); }
   }
@@ -2450,12 +2456,11 @@ module orient_clone(points, from=[0,0,1]) {
   for (p=points) orient(p, from) children();
 }
 
-// clone a number of copies by applying a displacement d, an orientation to v, and a scaling s in each iteration
-module mm_clone(n, d=[10,0,0], v=[0,0,0], s=[1,1,1], mm) {
-  if (n>0) {
-    mm = (mm!=undef?mm:mm_ident());
-    multmatrix(mm) children();
-    mm_clone(n-1, d, v, s, mm_scale(s) * mm_rotate(v) * mm_translate(d) * mm) children();
+// clone a number of copies by applying multmatrix mm repeatedly
+module mm_clone(n, mm) {
+  if (n>0 && mm!=undef) {
+    mm_clone(n-1, mm) multmatrix(mm) children();
+    { $index = n; children(); }
   }
 }
 
