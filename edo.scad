@@ -331,8 +331,8 @@ function seg_length(path, i=0, b, t) = i>len(path)-2 ? [b,t] : let(s=norm(path[i
 function path_length(path, i=0) = i>=len(path)-1 ? 0 : norm(path[i+1]-path[i]) + path_length(path, i+1);
 
 // like lookup() but for both 2D and 3D paths (non-proportional/snaps to existing points) 
-// t in [0,1], e = snap threshold, disable if zero
-function path_lookup(path, t, loop=false, e=0) = let(p=close_loop(path, loop), k=len(p), n=k-1, i=floor(t*n), j=t*n-i) i<0||i>=n||j<e ? p[curb(i,k)] : p[i] + j*(p[i+1]-p[i]);
+// t in [0,1], e in [0,1] = snap threshold, 0 to disable, 1 always snap
+function path_lookup(path, t, loop=false, e=0) = let(p=close_loop(path, loop), k=len(p), n=k-1, i=floor(t*n), j=t*n-i) i<0||i>=n||j<e ? p[min(i,n)] : p[i] + j*(p[i+1]-p[i]);
 
 // find array index (as a real number) along path where distance is d
 // e.g. return 1.25 if path is [[0,0],[10,0],[30,0]] and d=15; 2 if d=30; or undef if d<0 or d>30
@@ -405,39 +405,39 @@ function angle_at(path, i, loop=true) = let(w=force2d(nearby(path, i, 1, loop)))
 // ====================================================================
 
 // smooth a path by replacing each segment with a bezier curve, div = subdivisions (auto if omit)
-function smooth(path, div, loop) = path==undef ? undef : div!=undef&&div<2 ? path : let(n=len(path)) n<3 ? path : n>200 ? echo(strc("smooth(): path too complex"), n=n) [] : loop || loop==undef && loopish(path) ? smooth_loop(path, div, n) : smooth_arc(path, div, n);
+function smooth(path, div, loop) = path==undef ? undef : div!=undef&&div<2 ? path : let(n=len(path)) n<3 ? path : n>200 ? echo(strc("smooth(): path too complex"), n=n) [] : loop || loop==undef && loopish(path) ? smooth_loop(path, div, n) : smooth_route(path, div, n);
 
 // compute bezier curve using 4 points [begin, control1, control2, end], t in [0,1]
 function bezier(points, t) = let(s=1-t) [s^3,3*t*s^2,3*s*t^2,t^3]*points;
 
 // --------------------------------------------
 
-// subroutine used by smooth_arc() to extract calculation results
-function spline_backtrack_arc(b, c, r, p, i) = let(q=(r[i]-c[i]*p)/b[i]) i==0 ? [q] :
-  concat(spline_backtrack_arc(b, c, r, q, i-1), [q]);
+// subroutine used by smooth_route() to extract calculation results
+function spline_backtrack_route(b, c, r, p, i) = let(q=(r[i]-c[i]*p)/b[i]) i==0 ? [q] :
+  concat(spline_backtrack_route(b, c, r, q, i-1), [q]);
 
-// subroutine used by smooth_arc() to generate input matrix
-function spline_matrix_arc(k, a=[0], b=[2], c=[1], r, i=1) = let(r=ifundef(r, [k[0]+2*k[1]]))
+// subroutine used by smooth_route() to generate input matrix
+function spline_matrix_route(k, a=[0], b=[2], c=[1], r, i=1) = let(r=ifundef(r, [k[0]+2*k[1]]))
   i==len(k)-2 ? [append(a, 2), append(b, 7), append(c, 0), append(r, 8*k[i]+k[i+1])] :
-  spline_matrix_arc(k, append(a, 1), append(b, 4), append(c, 1), append(r, 4*k[i]+2*k[i+1]), i+1);
+  spline_matrix_route(k, append(a, 1), append(b, 4), append(c, 1), append(r, 4*k[i]+2*k[i+1]), i+1);
 
-// subroutine used by smooth_arc() to find first set of control points
-function spline_control_points_arc(k, a, b, c, r, i=0) =
-  i==0 ? let(m=spline_matrix_arc(k)) spline_control_points_arc(k, m[0], m[1], m[2], m[3], 1) :
-  i==len(r) ? let(p=r[i-1]/b[i-1]) concat(spline_backtrack_arc(b, c, r, p, i-2), [p]) :
+// subroutine used by smooth_route() to find first set of control points
+function spline_control_points_route(k, a, b, c, r, i=0) =
+  i==0 ? let(m=spline_matrix_route(k)) spline_control_points_route(k, m[0], m[1], m[2], m[3], 1) :
+  i==len(r) ? let(p=r[i-1]/b[i-1]) concat(spline_backtrack_route(b, c, r, p, i-2), [p]) :
   let(m=a[i]/b[i-1], bb=override(b, i, b[i]-m*c[i-1]), rr=override(r, i, r[i]-m*r[i-1]))
-  spline_control_points_arc(k, a, bb, c, rr, i+1);
+  spline_control_points_route(k, a, bb, c, rr, i+1);
 
-// smooth an arc k by replacing each segment with a bezier curve, div = number of subdivisions
-function smooth_arc(k, div, n, i=0, p1, p2) = div&&div<=1 ? k : i==n-1 ? [k[i]] :
-  let(p1=(p1!=undef?p1:spline_control_points_arc(k)))
+// smooth a route k by replacing each segment with a bezier curve, div = number of subdivisions
+function smooth_route(k, div, n, i=0, p1, p2) = div&&div<=1 ? k : i==n-1 ? [k[i]] :
+  let(p1=(p1!=undef?p1:spline_control_points_route(k)))
   let(p2=(p2!=undef?p2:[for (i=incline(p1)) i==len(p1)-1 ? (k[i+1]+p1[i])/2 : 2*k[i+1]-p1[i+1]]))
   let(d=(div!=undef?div:ceil(path_length([for (t=quanta(8, end=1)) bezier([k[i], p1[i], p2[i], k[i+1]], t)]))))
-  concat([for (t=quanta(d)) bezier([k[i], p1[i], p2[i], k[i+1]], t)], smooth_arc(k, div, n, i+1, p1, p2));
+  concat([for (t=quanta(d)) bezier([k[i], p1[i], p2[i], k[i+1]], t)], smooth_route(k, div, n, i+1, p1, p2));
 
-// compute control points for smooth_arc() - for debug only
-function smooth_arc_cp(k) =
-  let(n=len(k), w=[for (i=[0:n-1]) max(1, norm(k[i]-k[(i+1)%n]))], p1=spline_control_points_arc(k, w, n))
+// compute control points for smooth_route() - for debug only
+function smooth_route_cp(k) =
+  let(n=len(k), w=[for (i=[0:n-1]) max(1, norm(k[i]-k[(i+1)%n]))], p1=spline_control_points_route(k, w, n))
   [p1, [for (i=incline(p1)) i==len(p1)-1 ? (k[i+1]+p1[i])/2 : 2*k[i+1]-p1[i+1]]];
 
 // --------------------------------------------
