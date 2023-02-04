@@ -417,27 +417,27 @@ function spline_backtrack_route(b, c, r, p, i) = let(q=(r[i]-c[i]*p)/b[i]) i==0 
   concat(spline_backtrack_route(b, c, r, q, i-1), [q]);
 
 // subroutine used by smooth_route() to generate input matrix
-function spline_matrix_route(k, a=[0], b=[2], c=[1], r, i=1) = let(r=ifundef(r, [k[0]+2*k[1]]))
+function spline_route_matrix(k, a=[0], b=[2], c=[1], r, i=1) = let(r=ifundef(r, [k[0]+2*k[1]]))
   i==len(k)-2 ? [append(a, 2), append(b, 7), append(c, 0), append(r, 8*k[i]+k[i+1])] :
-  spline_matrix_route(k, append(a, 1), append(b, 4), append(c, 1), append(r, 4*k[i]+2*k[i+1]), i+1);
+  spline_route_matrix(k, append(a, 1), append(b, 4), append(c, 1), append(r, 4*k[i]+2*k[i+1]), i+1);
 
 // subroutine used by smooth_route() to find first set of control points
-function spline_control_points_route(k, a, b, c, r, i=0) =
-  i==0 ? let(m=spline_matrix_route(k)) spline_control_points_route(k, m[0], m[1], m[2], m[3], 1) :
+function spline_route_cp(k, a, b, c, r, i=0) =
+  i==0 ? let(m=spline_route_matrix(k)) spline_route_cp(k, m[0], m[1], m[2], m[3], 1) :
   i==len(r) ? let(p=r[i-1]/b[i-1]) concat(spline_backtrack_route(b, c, r, p, i-2), [p]) :
   let(m=a[i]/b[i-1], bb=override(b, i, b[i]-m*c[i-1]), rr=override(r, i, r[i]-m*r[i-1]))
-  spline_control_points_route(k, a, bb, c, rr, i+1);
+  spline_route_cp(k, a, bb, c, rr, i+1);
 
 // smooth a route k by replacing each segment with a bezier curve, div = number of subdivisions
 function smooth_route(k, div, n, i=0, p1, p2) = div&&div<=1 ? k : i==n-1 ? [k[i]] :
-  let(p1=(p1!=undef?p1:spline_control_points_route(k)))
+  let(p1=(p1!=undef?p1:spline_route_cp(k)))
   let(p2=(p2!=undef?p2:[for (i=incline(p1)) i==len(p1)-1 ? (k[i+1]+p1[i])/2 : 2*k[i+1]-p1[i+1]]))
   let(d=(div!=undef?div:ceil(path_length([for (t=quanta(8, end=1)) bezier([k[i], p1[i], p2[i], k[i+1]], t)]))))
   concat([for (t=quanta(d)) bezier([k[i], p1[i], p2[i], k[i+1]], t)], smooth_route(k, div, n, i+1, p1, p2));
 
 // compute control points for smooth_route() - for debug only
 function smooth_route_cp(k) =
-  let(n=len(k), w=[for (i=[0:n-1]) max(1, norm(k[i]-k[(i+1)%n]))], p1=spline_control_points_route(k, w, n))
+  let(n=len(k), w=[for (i=[0:n-1]) max(1, norm(k[i]-k[(i+1)%n]))], p1=spline_route_cp(k, w, n))
   [p1, [for (i=incline(p1)) i==len(p1)-1 ? (k[i+1]+p1[i])/2 : 2*k[i+1]-p1[i+1]]];
 
 // --------------------------------------------
@@ -447,17 +447,17 @@ function spline_backtrack_loop(b, c, r, g, p, i, pn) = let(q=(r[i]-c[i]*p - g[i]
   concat(spline_backtrack_loop(b, c, r, g, q, i-1, pn), [q]);
 
 // subroutine used by smooth_loop() to generate input matrix
-function spline_matrix_loop(k, w, n, a=[], b=[], c=[], r=[], i=0) = i==n ? [a,b,c,r] :
+function spline_loop_matrix(k, w, n, a=[], b=[], c=[], r=[], i=0) = i==n ? [a,b,c,r] :
 let(j=(i+1)%n, v=i==0?w[n-1]:w[i-1], u=v+w[i], f=w[i]/w[j], g=u*u*k[i] + v*v*(1+f)*k[j])
-  spline_matrix_loop(k, w, n, append(a, w[i]*w[i]), append(b, 2*v*u), append(c, v*v*f), append(r, g), i+1);
+  spline_loop_matrix(k, w, n, append(a, w[i]*w[i]), append(b, 2*v*u), append(c, v*v*f), append(r, g), i+1);
 
 // subroutine used by smooth_loop() to find first set of control points
-function spline_control_points_loop(k, w, n, sc, a, b, c, r, g, i) =
-  i==undef ? let(m=spline_matrix_loop(k, w, n), g=concat([m[0][0]], repeat(0, n-1))) 
-  spline_control_points_loop(k, w, n, m[2][n-1], m[0], m[1], m[2], m[3], g, 0) :
+function spline_loop_cp(k, w, n, sc, a, b, c, r, g, i) =
+  i==undef ? let(m=spline_loop_matrix(k, w, n), g=concat([m[0][0]], repeat(0, n-1))) 
+  spline_loop_cp(k, w, n, m[2][n-1], m[0], m[1], m[2], m[3], g, 0) :
   i==n-2 ? let(m=a[n-1]/b[i], b=plus(b, n-1, -m*c[i]), r=plus(r, n-1, -m*r[i]), p=r[n-1]/b[n-1])
   concat(spline_backtrack_loop(b, c, r, g, p, i, p), [p]) :
-  let(m=a[i+1]/b[i], s=sc/b[i]) spline_control_points_loop(k, w, n, -s*c[i], 
+  let(m=a[i+1]/b[i], s=sc/b[i]) spline_loop_cp(k, w, n, -s*c[i], 
       plus(a, n-1, n<4 ? -s*c[i] : 0), 
       plus(plus(b, i+1, -m*c[i]), n-1, -s*g[i]),
       plus(c, i+1, i>n-3 ? -m*g[i] : 0), 
@@ -467,14 +467,14 @@ function spline_control_points_loop(k, w, n, sc, a, b, c, r, g, i) =
 // smooth a loop by replacing each segment with a bezier curve, div = number of subdivisions
 function smooth_loop(k, div, n, i=0, w, p1, p2) = div&&div<=1 ? k : i==n ? [] :
   let(w=(w!=undef?w:[for (i=[0:n-1]) max(1, norm(k[i]-k[(i+1)%n]))]))
-  let(p1=(p1!=undef?p1:spline_control_points_loop(k, w, n)))
+  let(p1=(p1!=undef?p1:spline_loop_cp(k, w, n)))
   let(p2=(p2!=undef?p2:[for (i=[0:n-1]) let(j=(i+1)%n) k[j]*(1+w[i]/w[j]) - p1[j]*w[i]/w[j]]))
   let(d=(div!=undef?div:round(path_length([for (t=quanta(8, end=1)) bezier([k[i], p1[i], p2[i], k[(i+1)%n]], t)]))))
   concat([for (t=quanta(d)) bezier([k[i], p1[i], p2[i], k[(i+1)%n]], t)], smooth_loop(k, div, n, i+1, w, p1, p2));
 
 // compute control points for smooth_loop() - for debug only
 function smooth_loop_cp(k) =
-  let(n=len(k), w=[for (i=[0:n-1]) max(1, norm(k[i]-k[(i+1)%n]))], p1=spline_control_points_loop(k, w, n))
+  let(n=len(k), w=[for (i=[0:n-1]) max(1, norm(k[i]-k[(i+1)%n]))], p1=spline_loop_cp(k, w, n))
   [p1, [for (i=[0:n-1]) let(j=(i+1)%n) k[j]*(1+w[i]/w[j]) - p1[j]*w[i]/w[j]]];
 
 // ====================================================================
