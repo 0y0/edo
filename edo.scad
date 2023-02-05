@@ -853,7 +853,7 @@ function ruler_path(p1, p2, n) = let(d=p2-p1) [for (t=quanta(n?n:ceil(norm(d)/$f
 function exp_path(p1, p2, n, r=2, v) = r==0 ? [p1,p2] : r==1 ? ruler_path(p1, p2, n) : let(v=(v!=undef?v:(p2-p1)*(1-r)/(1-pow(r,n)))) n==0 ? [p1] : let(p=p2-pow(r,n-1)*v) concat(exp_path(p1, p, n-1, r, v), [p2]); // divide into n segments of exponential ratios
 function bush_path(p1, p2, f=3, end=1) = let(dx=p2[0]-p1[0], dy=p2[1]-p1[1], dz=p2[2]-p1[2]) [for (t=quanta(norm(p1-p2)/$fs, end=end)) let(s=poly_ease(t,f)) p1+[dx*s,dy*s,dz*t]];
 function vault_path(p1, p2, n, loop=false) = let(q1=p1[2]<p2[2]?p1:p2, q2=p1[2]<p2[2]?p2:p1, m=q1+[0,0,q2[2]-q1[2]]) concat([for (t=quanta(ceil(n!=undef?n:norm(p2-p1)/$fs/2), end=1)) bezier([p1,m,m,p2], t)], loop?[m]:[]);
-function helix_path(p1, p2, d=3, pitch=1) = pitch==0 ? [] : let(v=p2-p1, r=d/2, n=norm(v), m=m3_rotate(v)) [for (t=quanta(ceil(PI*r*n/pitch/$fs), end=1)) let(a=360*t*n/pitch) p1+[cos(a)*r,sin(a)*r,n*t]*m];
+function helix_path(p1, p2, d=3, pitch=1, spin=0) = pitch==0 ? [] : let(v=p2-p1, r=d/2, n=norm(v), m=m3_rotate(v)) [for (t=quanta(ceil(PI*r*n/pitch/$fs), end=1)) let(a=spin+360*t*n/pitch) p1+[cos(a)*r,sin(a)*r,n*t]*m];
 
 // ====================================================================
 // 3D functions
