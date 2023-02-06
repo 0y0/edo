@@ -405,10 +405,13 @@ function angle_at(path, i, loop=true) = let(w=force2d(nearby(path, i, 1, loop)))
 // ====================================================================
 
 // smooth a path by replacing each segment with a bezier curve, div = subdivisions (auto if omit)
-function smooth(path, div, loop) = path==undef ? undef : div!=undef&&div<2 ? path : let(n=len(path)) n<3 ? path : n>200 ? echo(strc("smooth(): path too complex"), n=n) [] : loop || loop==undef && loopish(path) ? smooth_loop(path, div, n) : smooth_route(path, div, n);
+function smooth(path, div, loop, fn=bezier) = path==undef ? undef : div!=undef&&div<2 ? path : let(n=len(path)) n<3 ? path : n>200 ? echo(strc("smooth(): path too complex"), n=n) [] : loop || loop==undef && loopish(path) ? smooth_loop(path, div, n, fn) : smooth_route(path, div, n, fn);
 
 // compute bezier curve using 4 points [begin, control1, control2, end], t in [0,1]
-function bezier(points, t) = let(s=1-t) [s^3,3*t*s^2,3*s*t^2,t^3]*points;
+bezier = function(points, t) let(s=1-t) [s^3,3*t*s^2,3*s*t^2,t^3]*points;
+
+// compute tangent vector on a 4-point bezier curve, t in [0,1]
+bezier_tangent = function(points, t) let(s=1-t) [-3*s^2,3*s^2-6*s*t,6*s*t-3*t^2,3*t^2]*points;
 
 // --------------------------------------------
 
@@ -429,11 +432,11 @@ function spline_route_cp(k, a, b, c, r, i=0) =
   spline_route_cp(k, a, bb, c, rr, i+1);
 
 // smooth a route k by replacing each segment with a bezier curve, div = number of subdivisions
-function smooth_route(k, div, n, i=0, p1, p2) = div&&div<=1 ? k : i==n-1 ? [k[i]] :
+function smooth_route(k, div, n, fn=bezier, i=0, p1, p2) = div&&div<=1 ? k : i==n-1 ? [k[i]] :
   let(p1=(p1!=undef?p1:spline_route_cp(k)))
   let(p2=(p2!=undef?p2:[for (i=incline(p1)) i==len(p1)-1 ? (k[i+1]+p1[i])/2 : 2*k[i+1]-p1[i+1]]))
   let(d=(div!=undef?div:ceil(path_length([for (t=quanta(8, end=1)) bezier([k[i], p1[i], p2[i], k[i+1]], t)]))))
-  concat([for (t=quanta(d)) bezier([k[i], p1[i], p2[i], k[i+1]], t)], smooth_route(k, div, n, i+1, p1, p2));
+  concat([for (t=quanta(d)) fn([k[i], p1[i], p2[i], k[i+1]], t)], smooth_route(k, div, n, fn, i+1, p1, p2));
 
 // compute control points for smooth_route() - for debug only
 function smooth_route_cp(k) =
@@ -465,12 +468,12 @@ function spline_loop_cp(k, w, n, sc, a, b, c, r, g, i) =
       override(g, i+1, -m*g[i]), i+1);
 
 // smooth a loop by replacing each segment with a bezier curve, div = number of subdivisions
-function smooth_loop(k, div, n, i=0, w, p1, p2) = div&&div<=1 ? k : i==n ? [] :
+function smooth_loop(k, div, n, fn=bezier, i=0, w, p1, p2) = div&&div<=1 ? k : i==n ? [] :
   let(w=(w!=undef?w:[for (i=[0:n-1]) max(1, norm(k[i]-k[(i+1)%n]))]))
   let(p1=(p1!=undef?p1:spline_loop_cp(k, w, n)))
   let(p2=(p2!=undef?p2:[for (i=[0:n-1]) let(j=(i+1)%n) k[j]*(1+w[i]/w[j]) - p1[j]*w[i]/w[j]]))
   let(d=(div!=undef?div:round(path_length([for (t=quanta(8, end=1)) bezier([k[i], p1[i], p2[i], k[(i+1)%n]], t)]))))
-  concat([for (t=quanta(d)) bezier([k[i], p1[i], p2[i], k[(i+1)%n]], t)], smooth_loop(k, div, n, i+1, w, p1, p2));
+  concat([for (t=quanta(d)) fn([k[i], p1[i], p2[i], k[(i+1)%n]], t)], smooth_loop(k, div, n, fn, i+1, w, p1, p2));
 
 // compute control points for smooth_loop() - for debug only
 function smooth_loop_cp(k) =
