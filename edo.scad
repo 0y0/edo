@@ -230,7 +230,7 @@ function slice(array, idx, s=0) = [for (i=[0:len(array)-1]) wrap(array[i], idx+i
 // affix an extra dimension to array elements, e.g. affix([[1,0],[2,5]], [7,8]) -> [[1,0,7],[2,5,8]], tail is cyclic
 function affix(array, tail) = tail==undef ? array : [for (i=[0:len(array)-1]) append(array[i], opt(tail, i))];
 
-// resize array by picking one out of every n elements (size increases due to duplicates if n < 1), s=shift
+// resize array by picking one out of every n elements (size increases due to duplicates if n < 1), s=skip
 function every(array, n=1, s=0, center=false) = n==1 && s==0 ? array : let(k=len(array), c=floor((k-1)/2), s=center?c%n:s%k) [if (k>n && n>0) for (i=[s:n:k-1]) let(j=round(i)) if (j<k) array[j]];
 
 // swap two elements in an array
@@ -405,7 +405,7 @@ function angle_at(path, i, loop=true) = let(w=force2d(nearby(path, i, 1, loop)))
 // ====================================================================
 
 // smooth a path by replacing each segment with a bezier curve, div = subdivisions (auto if omit)
-function smooth(path, div, loop, fn=bezier) = path==undef ? undef : div!=undef&&div<2 ? path : let(n=len(path)) n<3 ? path : n>200 ? echo(strc("smooth(): path too complex"), n=n) [] : loop || loop==undef && loopish(path) ? smooth_loop(path, div, n, fn) : smooth_route(path, div, n, fn);
+function smooth(path, div, loop, fn=bezier) = assert(path) div!=undef&&div<2 ? path : let(n=len(path)) n<3 ? path : n>200 ? echo(strc("smooth(): path too complex"), n=n) [] : loop || loop==undef && loopish(path) ? smooth_loop(path, div, n, fn) : smooth_route(path, div, n, fn);
 
 // compute bezier curve using 4 points [begin, control1, control2, end], t in [0,1]
 bezier = function(points, t) let(s=1-t) [s^3,3*t*s^2,3*s*t^2,t^3]*points;
@@ -889,7 +889,10 @@ function swap_yz(points) = [for (p=points) [p[0],ifundef(p[2],0),p[1]]];
 function swap_xz(points) = [for (p=points) [ifundef(p[2],0),p[1],p[0]]];
 
 // check for a valid 3D point
-function valid3d(point) = is_num(point[0]) && is_num(point[1]) && is_num(point[2]);
+function valid3d(point) = point!=undef && is_num(point[0]) && is_num(point[1]) && is_num(point[2]);
+
+// check for valid 3D points, e.g. assert(good3d(points))
+function good3d(points, i=0) = i==len(points) ? true : valid3d(points[i]) && good3d(points, i+1);
 
 // return span of each dimension
 function span3d(points) = [for (i=[0:2]) span(slice(points, i))];
