@@ -484,11 +484,11 @@ function smooth_loop_cp(k) =
 // 2D functions
 // ====================================================================
 
-// cartesian-to-polar coordinates conversion [x,y]->[a,d]
+// cartesian-to-polar coordinates conversion [x,y]->[a,r]
 function c2p(x, y) = is_list(x) ? [atan2(x[1], x[0]), norm(x)] : [atan2(y, x), norm([x,y])];
 
-// polar-to-cartesian coordinates conversion, [a,d]->[x,y] (accepts 
-function p2c(a, d) = is_list(a) ? a[1]*[cos(a[0]),sin(a[0])] : d*[cos(a),sin(a)];
+// polar-to-cartesian coordinates conversion, [a,r]->[x,y]
+function p2c(a, r) = is_list(a) ? a[1]*[cos(a[0]),sin(a[0])] : r*[cos(a),sin(a)];
 
 // convert a scalar or a 2D point to 3D, filling in y and z as necessary, preserving points already in 3D
 function as3d(point, y=0, z=0) = [ifundef(point[0], point), ifundef(point[1], y), ifundef(point[2], z)];
@@ -666,7 +666,7 @@ function tidy2d(p, r, loop=false, lean=false, e=0.001) = r==0 ? p : let(k=len(p)
   let(d=[for (i=g) if (len([for (j=g) if (j!=i && ((j[0]<=i[0] && j[1]>=i[1])||(j[0]<=i[0]+k && j[1]>=i[1]+k))) 1])==0) i])
   [for (i=[0:k-1]) let(t=[for (j=d) if (within(i,j[0],j[1]) || within(i+k,j[0],j[1])) j]) if (!lean || len(t)==0 || i==t[0][1]%k) len(t)==0 ? p[i] : t[0][2]];
 
-// return a profile keeping distance d away from the given profile, tidy=optional radius for cleanup
+// return a profile with rounded corners keeping distance d away from the given profile
 // note that number of points on the resulting profile will be different from the original
 function escort2d(profile, d=1, loop=false, /*private*/ i=0, k, q) = d==0 ? profile :
   let(k=k?k:len(profile), p0=profile[(i+k-1)%k], p1=profile[i%k], p2=profile[(i+1)%k])
@@ -675,9 +675,9 @@ function escort2d(profile, d=1, loop=false, /*private*/ i=0, k, q) = d==0 ? prof
   let(s=i==0?[if(!loop)q1]:i==e?[]:let(u=proj3(d1,p2-p1,d0)+proj3(d0,p0-p1,d1))sign(c)==sign(d)&&norm(u)<7*abs(d)?[p1+u]:norm(q0-q1)<$fs?[(q0+q1)/2]:c<0?ccw_path(q0,q1,po=p1):cw_path(q0,q1,po=p1))
   concat(s, i==e?[if(!loop)q0]:escort2d(profile, d, loop, i+1, k, q));
 
-// inflate/deflate (offset) a profile (does not work well in some cases) [private: i, m, e, p]
-// it's different from escort2d() because it always assumes a loop and preserves number of points in the original
-function offset2d(profile, d=1, f=3, tidy=50, i=0, m, e, p) = d==0 ? profile :
+// inflate/deflate (offset) a profile (does not work well in some cases), f=pointiness threshold, tidy=cleanup range
+// it's different from escort2d() because it always assumes a loop and preserves number of points
+function offset2d(profile, d=1, f=3, tidy=50, /*private*/ i=0, m, e, p) = d==0 ? profile :
   let(m=ifundef(m, len(profile))) i==m+1 ?  tidy2d(p, tidy, loop=true, lean=false) :
   let(s1=profile[(i+m-1)%m], s2=profile[i%m], u=unit([s2[1]-s1[1],s1[0]-s2[0]])*d, v1=s1+u, v2=s2+u)
   let(pp=i==0 ? [] : concat(p, [v1==v2 ? e[1] : colinear(e[1]-e[0], v2-v1) ? v1 : let(c=ifundef(meet2d(e, [v1,v2], true), v1)) abs(norm(c-s1)/d)>f ? s1*0.95+c*0.05 : c])) offset2d(profile, d, f, tidy, i+1, m, [v1,v2], pp);
@@ -965,9 +965,6 @@ function force3d(points, z) = rank(points)>1 ? [for (p=points) [p[0],p[1],z==und
 
 // shake up 3D points
 function shake3d(points, max=10, seed) = let(s=rnd_seed(seed)) [for (i=[0:len(points)-1]) points[i] + rnd(-max/2, max/2, 3, i+s/(i+1))];
-
-// invert layers along z-axis
-function invert3d(layers, h) = [for (p=layers) [for (i=[len(p)-1:-1:0]) [p[i][0],p[i][1],h-p[i][2]]]];
 
 // reflect points vertically across xy-plane
 function reflect3d(points) = [for (p=points) [p[0],p[1],-p[2]]];
@@ -1301,7 +1298,7 @@ module punch2d(locs=[[0,0]], m=3) {
 module dot(p=[0,0,0], r=0.001) { translate(p) polyhedron(tetra(r), tetra_faces(), convexity=10); }
 
 // a disc
-module disc(d=10, h=1) { solid(ring_path(d), h); }
+module disc(d=10, h=1, a=[0,360]) { solid(concat([if (abs(a[1]-a[0])%360!=0) [0,0]], ring_path(d, a=a)), h); }
 
 // a dome (hemisphere), d=diameter, t=thickness (may be negative, zero means filled)
 module dome(d=10, t=0, a=[0,90]) {
