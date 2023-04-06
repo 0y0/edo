@@ -2213,15 +2213,19 @@ module mesh_block(points, h=0, zscale=1) {
 
 // generate a mesh block from a set of points representing n layers of contours (no need to be coplanar)
 // layers=[L1, L2, ... Lm] where each L is a list of 3D points [p1, p2, p3, ... pn] of same length n
-module layered_block(layers, loop=false, invert=false) {
+// invert=reverse layers, s=contour offset for twisted loop
+module layered_block(layers, loop=false, invert=false, s=0) {
   k = len(layers);
   n = len(layers[0]);
   if (k>0 && n>0) {
     v = [for (i=indices(layers, invert)) each layers[i]];
     g = len(v);
-    f = [for (j=[0:k-(loop?1:2)], i=[0:n-1]) let(a=n*j, b=n*((j+1)%k), c=(i+1)%n) each [[a+i,b+c,a+c],[a+i,b+i,b+c]]];
-    polyhedron(v, loop ? f : concat(f, [[for (i=[0:n-1])i], [for (i=[1:n])g-i]]), convexity=10);
-  }
+    f = [for (j=[0:k-2], i=[0:n-1]) let(a=n*j, b=n*((j+1)%k), c=(i+1)%n) each [[a+i,b+c,a+c],[a+i,b+i,b+c]]];
+    polyhedron(v, loop ?
+        concat(f, [for (i=[0:n-1]) let(a=n*k-n, b=(i+s)%n, c=(i+1)%n) each [[a+b,c,a+(c+s)%n],[a+b,i,c]]]) :
+        concat(f, [[for (i=[0:n-1])i], [for (i=[1:n])g-i]]),
+      convexity=10);
+  }   
 }
 
 // create a layered shell by thickening each layer outward (or inward if negative), requires coplanar layers
