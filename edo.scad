@@ -1316,8 +1316,8 @@ module slab(dm=[1,1,1]) {
 }
 
 // a rectangular pad with rounded corners
-module pad(x, y, h=1, bottom=0, r=1) {
-  solid(pad_path(w=x, d=y, r=r), h=h, bottom=bottom);
+module pad(x, y, h=1, bottom=0, r=1, half=false) {
+  solid(pad_path(w=x, d=y, r=r, half=half), h=h, bottom=bottom);
 }
 
 // a right-angle vault between 2 points for ceiling support, t=thickness, n=resolution
@@ -1334,7 +1334,9 @@ module pyramind(profile, h=5, inset=3, scale=0, origin) {
   p = origin ? shift2d(profile, c) : profile;
   if (scale!=0)
     translate(c) deepen(h, scale=scale) polygon(shift2d(profile, -c));
-  else if (inset!=0)
+  else if (inset<0)
+    layered_block(reverse([force3d(offset2d(p, -inset)), force3d(profile, h)], enable=h<0));
+  else
     layered_block(reverse([force3d(profile), force3d(offset2d(p, -inset), h)], enable=h<0));
 }
 
@@ -2403,9 +2405,9 @@ module clone(n, x=0, y=0, z=0) {
 // clone at each of the 3D location, optional rot = rotation angles of each copy
 module clone_at(points, rot) {
   if (rot == undef) {
-    for (p=points) translate(p) children();
+    for (i=[0:len(points)-1]) translate(points[i]) { $index=i; children(); }
   } else {
-    for (i=[0:len(points)-1]) translate(points[i]) rotate(rot[i%len(rot)]) children();
+    for (i=[0:len(points)-1]) translate(points[i]) rotate(rot[i%len(rot)]) { $index=i; children(); }
   }
 }
 

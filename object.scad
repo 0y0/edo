@@ -12,11 +12,16 @@ module cell_cr123a(d=17, h=34.5, cd=5.5, ch=1, center=false, invert=false) cell_
 module cell_18650(d=18, h=65, cd=10, ch=0.5, center=false, invert=false) cell_generic(d, h, cd, ch, center, invert);
 module cell_32700(d=33, h=71, cd=15, ch=0.1, center=false, invert=false) cell_generic(d, h, cd, ch, center, invert);
 
-module cell_spring_slot(s=2.1, t=0.5, b=1) {
-  deepen(b+7) offset(t*3) line2d([[2,-t*2],[-2,-t*2]]);
-  deepen(b+10) offset(t) line2d([[3.5,s],[6,s],[6,0],[-6,0],[-6,s],[-3.5,s]]);
-  deepen(b) offset(t) line2d([[3.5,s],[3.5,0],[-3.5,0],[-3.5,s]]);
-  ascend(b+5) sphere(t/2+1);
+// cell contact plate slot, s=slot gap, t=thickness, b=bottom gap, f=spine size
+module cell_spring_slot(s=2.1, t=1, b=1, f=1) {
+  d = t/2;
+  c = s+t-1;
+  slide(y=-t/2) {
+    if (f>0) slide(y=(-f-t)/2) flipz() pad(6, f, h=b+7, r=1, half=true);
+    deepen(b+10) offset(t/2) line2d([[3+d,c],[5.5+d,c],[5.5+d,0],[-5.5-d,0],[-5.5-d,c],[-3-d,c]]);
+    deepen(b) offset(t/2) line2d([[3+d,s+t-1],[3+d,0],[-3-d,0],[-3-d,s+t-1]]);
+    ascend(b+5) slide(y=(t-1)/2) flipx(-90) dome(2.5);
+  }
 }
 
 module bearing_608() {
@@ -38,7 +43,7 @@ module bracket(dm, fold=0.5, r=5, a=90) {
 // a basic case based on a profile, children will be placed on the bottom of bin
 // h=height, d=lid height, t=thickness (outwards, can be negative), g=gap, sp=spacer
 // view={undef:print, 0:cross-section, 1:bin, 2:lid, 3:closed, 4:profile}
-module basic_case(profile, h=25, d=8, t=2.8, g=0.1, sp=0, top=true, bottom=true, view) {
+module basic_case(profile, h=25, d=10, t=2.8, g=0.1, sp=0, top=true, bottom=true, view) {
   a = abs(t);
   h = max(a*4-0.2, h);
   d = max(a*2, min(h-a, d));
@@ -49,10 +54,10 @@ module basic_case(profile, h=25, d=8, t=2.8, g=0.1, sp=0, top=true, bottom=true,
   u = 0.5; // upper stopper radius
 
   // lid cross section
-  c1 = append(concat2d([
-    step2d([[0,a-d],[0.001,0],[a/2-0.001,0],[0,d-a/2]]),
-    ccw_path([0,0], [-a/2+0.01,a/2], $fs=$fs/2)
-  ], [t/2,-a]), [t/2,0]);
+  c1 = concat2d([
+    step2d([[0,a-d],[0.001,0],[a/2-0.001,0],[0,d-a]]),
+    ccw_path([0,0], [-a+0.01,a], $fs=$fs/2)
+  ], [t/2,-a]);
 
   // bin cross section
   c2 = concat2d([
@@ -64,33 +69,36 @@ module basic_case(profile, h=25, d=8, t=2.8, g=0.1, sp=0, top=true, bottom=true,
   ], [t<0?-a-g:-g,0]);
 
   if (view==undef) { // print
-    scatter(e+abs(t)*4+sp) {
-      basic_case(p, h, d, t, g, sp, top, bottom, 1) children(); // bin
-      basic_case(p, h, d, t, g, sp, top, bottom, 2); // lid
+    scatter(box2dw(profile)+abs(t)*4+sp) {
+      basic_case(p, h, d, t, g, sp, top, bottom, 1) if ($children>0) children(0); // bin
+      basic_case(p, h, d, t, g, sp, top, bottom, 2) if ($children>1) children(1); // lid
     }
-  } else child(view) {
-    // cross-section
+  } else select(view) {
+    // 0: cross-section
     clip([e*1.2,e*1.2,h], cy=0) {
-      basic_case(p, h, d, t, g, sp, top, bottom, 1); // bin
-      ascend(h-0.1) flipy() basic_case(p, h, d, t, g, sp, top, bottom, 2); // lid
+      basic_case(p, h, d, t, g, sp, top, bottom, 1) if ($children>0) children(0); // bin
+      ascend(h-0.1) flipy() basic_case(p, h, d, t, g, sp, top, bottom, 2) if ($children>1) children(1); // lid
     }
-    // bin
+    // 1: bin + children
     union() {
       m2 = [for (i=c2) force3d(offset2d(profile, i[0]), i[1])];
       layered_block(m2, loop=!bottom);
       ascend(t-0.01) children();
     }
-    // lid
+    // 2: lid - children
     flipy() {
       m1 = [for (i=c1) force3d(offset2d(profile, i[0]), i[1])];
-      layered_block(m1, loop=!top);
+      difference() {
+        layered_block(m1, loop=!top);
+        children();
+      }
     }
-    // closed
+    // 3: closed
     union() {
-      basic_case(p, h, d, t, g, sp, top, bottom, 1); // bin
-      ascend(h-0.1) flipy() basic_case(p, h, d, t, g, sp, top, bottom, 2); // lid
+      basic_case(p, h, d, t, g, sp, top, bottom, 1) if ($children>0) children(0); // bin
+      ascend(h-0.1) flipy() basic_case(p, h, d, t, g, sp, top, bottom, 2) if ($children>1) children(1); // lid
     }
-    // profile only
+    // 4: profile only
     plot(p, color="red", dup=true);
   }
 }
