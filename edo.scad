@@ -1081,6 +1081,7 @@ function m4_euler(a=[0,0,0]) = [ // Euler angles suffer from gimbal lock, should
 
 // object transformations using multmatrix() (right to left order), e.g. multmatrix(m3*m2*m1) children();
 
+function mm_m3(m) = concat([for (r=transpose(m)) concat(r, [0])], [[0,0,0,1]]); // convert from m3 matrix
 function mm_ident(k=1) = [[k,0,0,0], [0,k,0,0], [0,0,k,0], [0,0,0,1]];
 function mm_scale(s=[1,1,1]) = [[s[0],0,0,0], [0,s[1],0,0], [0,0,s[2],0], [0,0,0,1]];
 function mm_translate(v=[0,0,0]) = [[1,0,0,v[0]], [0,1,0,v[1]], [0,0,1,v[2]], [0,0,0,1]];
@@ -1299,6 +1300,9 @@ module dot(p=[0,0,0], r=0.001) { translate(p) polyhedron(tetra(r), tetra_faces()
 
 // a disc
 module disc(d=10, h=1, a=[0,360]) { solid(concat([if (abs(a[1]-a[0])%360!=0) [0,0]], ring_path(d, a=a)), h); }
+
+// a teardrop
+module teardrop(h=10, f=1) { lathe(float2d(spin2d(tear_path(h/f, f=f), -90))); }
 
 // a dome (hemisphere), d=diameter, t=thickness (may be negative, zero means filled)
 module dome(d=10, t=0, a=[0,90]) {
@@ -2522,6 +2526,15 @@ module sweep_clone(path, n, loop=true, r=1, debug=false) {
   }
 }
 
+// clone a copy on each orthogonal plane
+module orth_clone(t=[[0,1,0,0],[0,0,1,0],[1,0,0,0],[0,0,0,1]]) {
+  children();
+  multmatrix(t) {
+    multmatrix(t) children();
+    children();
+  }
+}
+
 // ====================================================================
 // fillet modules
 // ====================================================================
@@ -2583,7 +2596,7 @@ module fillet_cube(dm, r=5, center=false) {
   }
 }
 
-// extrude a counterclockwise profile with configurable fillets at bottom (xz0) and top (xz1)
+// extrude a profile with configurable fillets at bottom (by xz0 or r0 or r) and top (by xz1 or r1 or r)
 // the default will round both top and bottom (set x in xz to zero for no fillet)
 module fillet_extrude(profile, h=1.6, xz0=[-1,1], xz1=[-1,1], r0, r1, r, convex=false, core=true) {
   if (h>0) {
