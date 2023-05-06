@@ -508,8 +508,8 @@ function parallel2d(u, v, e=1e-4) = abs(u[0]*v[1] - u[1]*v[0]) < e;
 // angle between two vectors
 function angle2d(u, v) = atan2(v*[-u[1],u[0]], v*u);
 
-// rotate CCW 90 degrees about origin
-function orth2d(points) = is_list(points[0]) ? [for (p=points) [-p[1],p[0]]] : [-points[1],points[0]];
+// rotate CCW 90 degrees about origin, use f=1 for CW
+function orth2d(points, f=-1) = is_list(points[0]) ? [for (p=points) f*[p[1],-p[0]]] : f*[points[1],-points[0]];
 
 // scale each coordinate individually {see shear()}
 function scale2d(points, ratios) = let(xs=opt(ratios,0), ys=opt(ratios,1,1)) [for (p=points) [p[0]*xs,p[1]*ys]];
@@ -604,8 +604,11 @@ function rebase2d(profile, d=1) = let(k=len(profile), j=[for (i=[k-1:-1:0]) let(
 // check if profile is strictly convex
 function convex2d(profile, f=0.001, i=0, k) = let(k=ifundef(k, len(profile))) i<k ? let(p0=profile[(i+k-1)%k], p1=profile[i], p2=profile[(i+1)%k]) convex2d(profile, f, i+1, k) && cross(unit(p2-p1), unit(p0-p1))>-f : true;
 
-// flip a 2D profile from the xy-plane to the xz-plane in 3D, for debugging throw() and lathe()
-function upright2d(profile, shift=[0,0]) = [for (p=shift2d(profile, shift)) [p[0],0,p[1]]];
+// flip a 2D profile from the xy-plane to the xz-plane in 3D
+function upfront2d(profile, shift=[0,0]) = [for (p=shift2d(profile, shift)) [p[0],0,p[1]]];
+
+// flip a 2D profile from the xy-plane to the yz-plane in 3D
+function upright2d(profile, shift=[0,0]) = [for (p=shift2d(profile, shift)) [0,p[1],p[0]]];
 
 // squeeze near the center of a profile, x,y=amount
 function squeeze2d(profile, x=0, y=0) = let(
@@ -778,7 +781,7 @@ function comma_path(d=10, f=0.5) = let(n=_fn2(d/2)) [for (t=quanta(n, end=1, max
 function leaf_path(d, f) = let(f=ifundef(f, d*0.6)) [for (a=quanta(_fn(d/3), max=360)) [d*cos(a),f*sin(a)^3]/2];
 function cloud_path(w, d, n=11, f=3, seed) = let(d=ifundef(d, w), seed=rnd_seed(seed), p=shake2d(round_path(w/2, d/2, $fn=n), (w+d)/40, seed=seed), k=len(p)) loop2d([for (i=[0:k-1]) ccw_path(p[i], p[(i+1)%k], f)]);
 function pad_path(w, d, r=2, half=false) =
-  let(d=ifundef(d,w), r=max(0.01, min(r, min(w, d)/2-0.01)), w2=w/2, d2=d/2) concat(
+  let(d=ifundef(d,w), r=max(0.01, min(r, min(w, d)/(half?1:2)-0.01)), w2=w/2, d2=d/2) concat(
     ccw_path([w2,d2-r], [w2-r,d2], po=[w2-r,d2-r]),
     ccw_path([-w2+r,d2], [-w2,d2-r], po=[-w2+r,d2-r]),
     half ? [[-w/2,-d/2]] : ccw_path([-w2,-d2+r], [-w2+r,-d2], po=[-w2+r,-d2+r]),
