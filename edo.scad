@@ -1335,8 +1335,8 @@ module vault(p1, p2, t=1, n) {
   layered_block([shift3d(c, -u*t/2), shift3d(c, u*t/2)]);
 }
 
-// a pyramind from a profile, origin=center of offset if provided (defaults to profile center)
-module pyramind(profile, h=5, inset=3, scale=0, origin) {
+// a pyramid from a profile, origin=center of offset if provided (defaults to profile center)
+module pyramid(profile, h=5, inset=3, scale=0, origin) {
   c = (origin!=undef?origin:box2dc(profile));
   p = origin ? shift2d(profile, c) : profile;
   if (scale!=0)
