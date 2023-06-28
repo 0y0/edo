@@ -13,6 +13,7 @@ $fs = 0+0.3;
 $inf = 1/0; // infinity
 $font = "Hiragino Maru Gothic ProN"; // default font
 $debug = false; // enable debug messages
+$pwd = undef; // used by audit() and stl()
 
 // for command line executions only
 $BATCH = false; // executing from command line
@@ -1037,6 +1038,7 @@ function hilbert3(s, u=1, v=[0,0,0], d1=[1,0,0], d2=[0,1,0], d3=[0,0,1]) = (u==0
 
 function m2_scale(s=[1,1]) = [[s[0],0],[0,s[1]]];
 function m2_rotate(a) = [[cos(a),sin(a)],[-sin(a),cos(a)]];
+function m2_inverse(m) = let(a=m[0][0], b=m[0][1], c=m[1][0], d=m[1][1]) [[d,-b],[-c,a]]/(a*d-b*c);
 
 // 3x3 matrix (left to right order), e.g. [[1,2,3]]*m3_spin(45) or points*m1*m2*m3
 
@@ -1052,6 +1054,13 @@ let(c=(basis!=undef?basis:cross(from, v)), q=append(c, from*v), r=unit(override(
   [1-2*r[1]*r[1]-2*r[2]*r[2],   2*r[0]*r[1]+2*r[2]*r[3],   2*r[0]*r[2]-2*r[1]*r[3]],
   [  2*r[0]*r[1]-2*r[2]*r[3], 1-2*r[0]*r[0]-2*r[2]*r[2],   2*r[1]*r[2]+2*r[0]*r[3]],
   [  2*r[0]*r[2]+2*r[1]*r[3],   2*r[1]*r[2]-2*r[0]*r[3], 1-2*r[0]*r[0]-2*r[1]*r[1]]];
+function m3_inverse(m) = [
+  [m[1][1]*m[2][2]-m[2][1]*m[1][2], m[0][2]*m[2][1]-m[0][1]*m[2][2], m[0][1]*m[1][2]-m[0][2]*m[1][1]],
+  [m[1][2]*m[2][0]-m[1][0]*m[2][2], m[0][0]*m[2][2]-m[0][2]*m[2][0], m[1][0]*m[0][2]-m[0][0]*m[1][2]],
+  [m[1][0]*m[2][1]-m[2][0]*m[1][1], m[2][0]*m[0][1]-m[0][0]*m[2][1], m[0][0]*m[1][1]-m[1][0]*m[0][1]]]/
+  (m[0][0]*(m[1][1]*m[2][2]-m[2][1]*m[1][2]) -
+   m[0][1]*(m[1][0]*m[2][2]-m[1][2]*m[2][0]) +
+   m[0][2]*(m[1][0]*m[2][1]-m[1][1]*m[2][0]));
 
 // affine transformations (left to right order), e.g. [4,5,6,1]*m4_euler([10,20,30]) or m4_transform(points, m1*m2*m3)
 
@@ -1441,11 +1450,17 @@ module beam(p1, p2, dm=0.5, c=0, profile) {
 // an arrow of vector v at point p, d=diameter, c=cone length, r=cone-beam ratio (overrides c)
 module arrow(v=[0,0,5], p=[0,0,0], d=0.25, c=2, r) {
   if (v != undef) {
-    v = as3d(v);
-    n = norm(v);
-    q = confine(r!=undef ? 1-r : 1-c/n, 0, 1);
-    beam(p, p+v*q, d);
-    translate(p+v*q) orient(v) cylinder(n*(1-q), d, 0, $fn=_fn(d/2));
+    rk = rank(v);
+    if (rk == 1) {
+      v = as3d(v);
+      n = norm(v);
+      q = confine(r!=undef ? 1-r : 1-c/n, 0, 1);
+      beam(p, p+v*q, d);
+      translate(p+v*q) orient(v) cylinder(n*(1-q), d, 0, $fn=_fn(d/2));
+    }
+    else if (rk == 2) {
+      for (i=v) arrow(i, p, d, c, r);
+    }
   }
 }
 
@@ -1486,6 +1501,13 @@ module plot(profile, d=0.2, loop=false, color="gold", dot=true, dup=false, div=1
       for (i=seams(profile, true)) let(v=profile[i]) color(color) arrow([0,0,-3], [v[0],v[1],ifundef(v[2],0)+3.2]);
     }
   }
+}
+
+// chart a function on xy-plane
+module chart(fn, span=[0:0.1:1], scale=[1,1], d=0.2) {
+  s0=opt(scale, 0, 1);
+  s1=opt(scale, 1, 1);
+  plot([for (t=span) [t*s0,fn(t)*s1]], d=d);
 }
 
 // alias for linear_extrude() with a default convexity (supports h<0 for extruding downwards)
@@ -1738,6 +1760,29 @@ module debug(s1, s2, color="red") {
   }
   children();
 }
+
+// perform XOR on two children, optional pwd=base directory
+// e.g. audit("path") { stl("name1"); stl("name2"); }
+module audit(pwd) {
+  if ($children == 2) {
+    $pwd = pwd;
+    difference() {
+      children(0);
+      children(1);
+    }
+    difference() {
+      children(1);
+      children(0);
+    }
+  }
+}
+
+// load STL file, relative to $pwd if defined, file extension not needed
+module stl(name) {
+  path = str($pwd==undef ? "" : str($pwd, "/"), name, ".stl");
+  import(path, convexity=9);
+}
+
 // switchable hiding of children
 module hide(enable=true) {
   if (!enable) children();
@@ -1991,9 +2036,9 @@ module screw_prop(m=[3,5], h=[0,10], b=[0,0], pitch=0.5, gap=0.1, xz=[1,2]) {
     ascend(h0) fillet_pipe(m1, h=hh, xz=xz, m=0);
 }
 
-// an insert for heatset nuts, d=outer_diameter, h=height, m=screw_diameter, w=inner_diameter (3.5 for M2, 4.2 for M3)
-module heatset_prop(d=8, h=3, m=3, w=4.2, fillet=2) {
-  fillet_pipe(d=max(m+4, d), h=h, m=w-0.2, xz=[max(0,opt(fillet,0)),opt(fillet,1,3)]);
+// an insert for heatset nuts, d=outer_diameter, h=height, w=inner_diameter, m=screw_diameter (3.3 for M2, 4.0 for M3)
+module heatset_prop(d=8, h=3, w=4, m=3, fillet=2) {
+  fillet_pipe(d=max(m+4, d), h=h, m=w, xz=[max(0,opt(fillet,0)),opt(fillet,1,3)]);
   if (h>3) pipe(d=w+2, h=h-3, m=m+0.2);
 }
 
@@ -2312,7 +2357,10 @@ module flipy(a=180, h=0, enable=true) if (enable) ascend(h) rotate([0,a,0]) chil
 module flipz(a=180, h=0, enable=true) if (enable) ascend(h) rotate([0,0,a]) children(); else children();
 
 // rotate angle a about z-axis
-module spin(a, origin=[0,0]) translate(origin) rotate([0,0,a]) translate(-origin) children();
+module spin(a, origin=[0,0], enable=true) {
+  if (enable) translate(origin) rotate([0,0,a]) translate(-origin) children();
+  else children();
+}
 
 // orient children using the transformation [0,0,1] -> v (or [1,0] -> v if v is 2D) 
 module orient(v, from=[0,0,1], basis) {
