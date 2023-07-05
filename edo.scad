@@ -376,12 +376,13 @@ function lean(path, f=1, loop, i=0, k) = let(k=ifundef(k, len(path)), loop=(loop
 function uniform(path, f=$fs, loop=true) = f==0 ? path : coarse(refine(path, ds=f/3, loop=loop), ds=f, loop=loop);
 
 // soften a path by replacing each sharp corner with an arc of radius no greater than r
-function soften(path, r=5, loop=true, i=0, m, pp) = r==0 ? path :
+// b=how deep is the replacement (could break up the path if set too high, 0.5 is safe)
+function soften(path, r=5, loop=true, b=0.5, i=0, m, pp) = r==0 ? path :
   let(p=i==0 && loop ? concat([path[len(path)-1]], path, [path[0]]) : path)
   let(m=ifundef(m, len(p)), pp=ifundef(pp, loop ? [] : [p[0]])) i==m-2 ? loop ? pp : concat(pp, [p[m-1]]) :
   let(o=p[i+1], u=p[i]-o, v=p[i+2]-o, mu=norm(u), mv=norm(v), du=u/mu, dv=v/mv, c2=du*dv, t=sqrt((1-c2)/(1+c2)))
-  let(a=min([mu/2,mv/2,r/t]), f=o+a*du, g=o+a*dv, c=o+norm([a,min([r,a*t])])*unit(du+dv), e=cross(u,v))
-  soften(p, r, loop, i+1, m, concat(pp, abs(e)<1 || mu+mv<=$fs ? [o] : e<0 ? ccw_path(f, g, po=c) : cw_path(f, g, po=c)));
+  let(a=min([mu*b,mv*b,r/t]), f=o+a*du, g=o+a*dv, c=o+norm([a,min([r,a*t])])*unit(du+dv), e=cross(u,v))
+  soften(p, r, loop, b, i+1, m, concat(pp, abs(e)<1 || mu+mv<=$fs ? [o] : e<0 ? ccw_path(f, g, po=c) : cw_path(f, g, po=c)));
 
 // wobble a path's x and y coordinates wrt origin
 function wobble(path, by=0.03, n=32) = [for (p=path) let(t=1+cos(n*atan2(p[1], p[0]))*by) has(p[2]) ? [p[0]*t, p[1]*t, p[2]] : p*t];
@@ -1886,16 +1887,12 @@ module drill(locs=[[0,0,0]], xx, yy, zz, m=3, h, t, g=0, enable=true, debug=fals
 // head,tail=countersink [outer diameter, outer depth, inner depth] (e.g. [6,0.5,2] for M3)
 // ext=extension on both ends to allow a clean cut
 module hole(xy=[0,0], zz=[0,3], m=3, head, tail, gap, ext=0.1) {
-  mm = m + ifundef(gap, 0.2); // compensate for printed hole shrinking
-  translate([xy[0],xy[1],zz[0]-ext]) {
-    xo = mm/2-ext-0.01;
-    $fn = mof(_fn(m/2));
-    cylinder(d=mm, h=abs(zz[1]-zz[0])+ext*2);
-    if (head != undef) translate([0,0,zz[1]-zz[0]+ext*2]) rotate_extrude(angle=360, convexity=9)
-      polygon([[xo,0],[head[0]/2+ext,0],[head[0]/2+ext,-head[1]-ext*2],[xo,-head[2]-ext*2]], convexity=9);
-    if (tail != undef) rotate_extrude(angle=360, convexity=9)
-      polygon([[xo,0],[tail[0]/2+ext,0],[tail[0]/2+ext,tail[1]+ext*2],[xo,tail[2]+ext*2]], convexity=9);
-  }
+  gap = ifundef(gap, 0.1); // compensate for printed hole shrinkage
+  x = m/2 + gap;
+  ch = head==undef?[[x,zz[1]+ext]]:let(r=head[0]/2+gap) [[r,zz[1]+ext],[r,zz[1]-head[1]],[x,zz[1]-head[1]-head[2]]];
+  ct = tail==undef?[[x,zz[0]-ext]]:let(r=tail[0]/2+gap) [[x,zz[0]+tail[1]+tail[2]],[r,zz[0]+tail[1]],[r,zz[0]-ext]];
+  translate([xy[0],xy[1]]) rotate_extrude(angle=360, convexity=9, $fn=mof(_fn(x)))
+    polygon(concat([[0,zz[1]+ext]], ch, ct, [[0,zz[0]-ext]]));
 }
 
 // cut a hole in children for USB micro B socket, a=spin (0 means along y-axis)
