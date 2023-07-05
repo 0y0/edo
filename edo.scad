@@ -1102,7 +1102,7 @@ function mm_roll(a) = [[1,0,0,0], [0,cos(a),-sin(a),0], [0,sin(a),cos(a),0], [0,
 function mm_pitch(a) = [[cos(a),0,sin(a),0], [0,1,0,0], [-sin(a),0,cos(a),0], [0,0,0,1]]; // around y-axis
 function mm_spin(a) = [[cos(a),-sin(a),0,0], [sin(a),cos(a),0,0], [0,0,1,0], [0,0,0,1]]; // around z-axis (yaw)
 function mm_negate(b) = let(b=ifundef(b, [0,0,1]), f=orth(b), v=cross(f, b)) mm_rotate(v, f, b)*mm_rotate(-f, v, b);
-function mm_reframe(x, y, z) = [[x[0],y[0],z[0],0], [x[1],y[1],z[1], 0], [x[2],y[2],z[2],0], [0,0,0,1]]; // map to axes
+function mm_reframe(i, j, k) = [[i[0],j[0],k[0],0], [i[1],j[1],k[1], 0], [i[2],j[2],k[2],0], [0,0,0,1]]; // new basis
 function mm_rotate(v, from=[0,0,1], basis) = let(s=colinear(v, from)) s!=0 ? mm_ident(s) :
   let(c=(basis!=undef?basis:cross(from, v)), q=append(c, from*v), r=unit(override(q, 3, q[3]+norm(q)))) [
   [1-2*r[1]*r[1]-2*r[2]*r[2],   2*r[0]*r[1]-2*r[2]*r[3],   2*r[0]*r[2]+2*r[1]*r[3], 0],
