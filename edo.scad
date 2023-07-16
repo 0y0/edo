@@ -345,8 +345,8 @@ function path_map(path, loop=false, i=0, s=0) = let(p=i==0?close_loop(path, loop
 // combine a list of 3D paths end to end
 function path_concat(paths=[], i=0) = i>=len(paths) ? [] : let(p=paths[i]) concat(i>0 ? subarray(p, 1) : p, shift3d(path_concat(paths, i+1), last(p)-(paths[i+1] ? paths[i+1][0] : [0,0,0])));
 
-// return a subpath based on offsets h and t in mm (+ve relative to start; -ve relative to end; zero means no change)
-// e.g. subpath(p, 1, -1) to trim off 1mm at each end; subpath(p, -2, 0) to remove all but the last 2mm
+// trim a path based on offsets h and t in length (+ve relative to start; -ve relative to end; zero means no change)
+// e.g. subpath(p, 1, -1) to trim off 1 unit at each end; subpath(p, -2, 0) to remove all but the last 2 units
 function subpath(path, h=0, t=0) = h==0 && t==0 ? path :
   let(m=path_map(path), k=m[len(m)-1][0], i1=lookup(h<0?k+h:h, m), i2=lookup(t<=0?k+t:t, m))
   let(j1=ceil(i1), j2=floor(i2), f1=i1%1, f2=i2%1) i1>=i2 ? [] : concat([if (h!=0) path[j1]*f1+path[j1-1]*(1-f1)], [if (h==0||t==0||j1<j2) for (j=[j1:j2]) path[j]], [if (t!=0) path[j2]*(1-f2)+path[j2+1]*f2]);
@@ -977,6 +977,9 @@ function reflect3d(points) = [for (p=points) [p[0],p[1],-p[2]]];
 // orient 3D points on xy-plane (normal=[0,0,1]) to new normal vector n, with uniform rotation a about n
 function orient3d(points, n, from=[0,0,1], a=0) = points * m3_spin(a) * m3_rotate(n, from);
 
+// relocate 2D/3D points by spinning an angle a, then rotate z-axis to n, then translate to point p
+function stage3d(points, n=[0,0,1], p=[0,0,0], a=0) = m4_transform(points, m4_spin(a) * m4_rotate(n) * m4_translate(p));
+
 // wrap points on xy-plane around a vertical cylinder of diameter d, spanning angle a, reference width w
 function polar3d(points, d=20, a=360, w) = let(w=ifundef(w, box2dw(points)), r=d/2) [for (p=points) let(t=p[0]*a/w, e=ifundef(p[2],0)) [cos(t)*(r+e), sin(t)*(r+e), p[1]*(d*PI*a)/(w*360)]];
 
@@ -1212,7 +1215,7 @@ function morph3d(profiles, f=5, e=2, loop=false, dup=false) = let(f=max(1,f)) is
 // sweep_profile - sweep a constant profile along path
 // sweep_pipe - sweep a constant profile along path maintaining a consistent cross-section area
 // sweep_wall - sweep a constant profile along path maintaining its vertical orientation
-// sweep_layers - sweep a set of layers along path (no morphing)
+// sweep_layers - sweep a set of 2D layers along path (no morphing)
 // ====================================================================
 
 function sweep_profile(profile, path, loop=false, s=0, i=0, a, m, t) = let(k=len(path)) i==k ? [] :
@@ -2574,11 +2577,11 @@ module sweep_clone(path, n, loop=true, r=1, debug=false) {
   }
 }
 
-// clone a copy on each orthogonal plane
-module orth_clone(t=[[0,1,0,0],[0,0,1,0],[1,0,0,0],[0,0,0,1]]) {
+// clone a copy on each orthogonal plane, m=rotation multmatrix
+module orth_clone(m=[[0,1,0,0],[0,0,1,0],[1,0,0,0],[0,0,0,1]]) {
   children();
-  multmatrix(t) {
-    multmatrix(t) children();
+  multmatrix(m) {
+    multmatrix(m) children();
     children();
   }
 }
