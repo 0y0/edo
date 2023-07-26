@@ -1207,7 +1207,7 @@ function morph_cookie(profile, h, b=0, origin=[0,0], f=0) =
 // n=resolution, f=smoothness, d=alignment_axis (see rebase2d)
 function morph_smooth(profiles, intervals, n=200, f=7, d=1) = let(h=accum(intervals), p=[for (i=indices(profiles)) force3d(rebase2d(resample(profiles[i], n), d=d), h[i])]) isomesh([for (q=isomesh(p)) smooth(q, f, loop=false)]);
 
-// morph along a list of 3D profiles in any orientation, f=resolution, e=threshold
+// morph along a list of 3D profiles in any orientation, f=resolution, e=threshold to merge points
 function morph3d(profiles, f=5, e=2, loop=false, dup=false) = let(f=max(1,f)) isomesh([for (c=isomesh(saturate(profiles, dup=dup))) max(span3d(c))<e ? repeat((c[0]+last(c))/2, loop?f*len(c):f*(len(c)-1)+1) : smooth(c, f, loop=loop)]);
 
 // ====================================================================
@@ -1899,15 +1899,23 @@ module hole(xy=[0,0], zz=[0,3], m=3, head, tail, gap, ext=0.1) {
 }
 
 // cut a hole in children for USB micro B socket, a=spin (0 means along y-axis)
-module cut_usb_hole(p=[0,0,0], a=0, depth=3, debug=false) {
+module cut_usb_micro_hole(p=[0,0,0], a=0, depth=3, debug=false) {
   difference() {
     children();
     highlight(debug) translate(p) rotate([0,0,a]) usb_micro_hole(depth);
   }
 }
 
+// cut a hole in children for USB C socket, a=spin (0 means along y-axis)
+module cut_usb_c_hole(p=[0,0,0], a=0, depth=3, debug=false) {
+  difference() {
+    children();
+    highlight(debug) translate(p) rotate([0,0,a]) usb_c_hole(depth);
+  }
+}
+
 // side hole for a standard USB mini B (old) socket
-module usb_hole(depth=3) {
+module usb_mini_hole(depth=3) {
   dd = depth + 0.2; // cut-out margin
   usb_mini_b = [[4,4],[4,2],[3,0],[-3,0],[-4,2],[-4,4]];
   translate([0,dd/2-0.1,0]) rotate([90,0,0]) linear_extrude(dd, convexity=9) polygon(usb_mini_b, convexity=9);
@@ -1918,6 +1926,14 @@ module usb_micro_hole(depth=3) {
   dd = depth + 0.2; // cut-out margin
   usb_micro_b = [[4,3.4],[4,1],[3,0],[-3,0],[-4,1],[-4,3.4]];
   translate([0,dd/2-0.1,0]) rotate([90,0,0]) linear_extrude(dd, convexity=9) polygon(usb_micro_b, convexity=9);
+}
+
+// side hole for a standard USB C socket
+module usb_c_hole(depth=3, gap=0.2) {
+  dm = [8.9,3.2];
+  dd = depth + 0.2; // cut-out margin
+  usb_c = pad_path(dm[0]+gap*2, dm[1]+gap*2, r=dm[1]+gap);
+  translate([0,dd/2-0.1,dm[1]/2]) rotate([90,0,0]) linear_extrude(dd, convexity=9) polygon(usb_c, convexity=9);
 }
 
 // PICOK 200 perfboard
@@ -2685,16 +2701,16 @@ module fillet_sweep(profile, path, c0, c1, s=0, twist=true, loop=false, offset=f
 }
 
 // create a lid from a profile with rounded top, where h=inner height, e=rim height, g=gap, top=closed or not
-module fillet_lid(profile, h=5, t=1.6, e=3, g=0.1, top=true, flip=false, tidy) {
+module fillet_lid(profile, h=5, t=1.6, e=3, g=0, top=true, flip=false, tidy) {
   tt = abs(t);
   td = t>0 && convex2d(profile) ? 0 : tidy;
-  te = max(tt/2-g, 1);
+  te = max(tt/2-g, 1.6);
   e = max(e, tt/2);
   p = scale2d(reverse(profile, loop=true), [-1,1]); // flip over
   pp = offset2d(p, -g-(t<0?tt:0), tidy=td);
   m1 = [for (i=arc_path(tt*2, [-90,0])) force3d(offset2d(p, i[0]-(t<0?tt:0), tidy=td), tt+i[1])];
   m2 = [force3d(last(m1), h+tt), force3d(pp, h+tt), force3d(pp, h+tt+e)];
-  m3 = [for (i=arc_path(te*2, [0,90])) force3d(offset2d(pp, i[0]-te, tidy=td), h+tt+e+i[1])];
+  m3 = [for (i=arc_path(te)) force3d(offset2d(pp, i[0]-te/2, tidy=td), h+tt+e+i[1])];
   flipy(enable=flip) {
     layered_block(concat(m1, m2, m3, [force3d(last(m3), top?tt:0)]), loop=!top);
     ascend(tt-0.01) children(); // allow union
