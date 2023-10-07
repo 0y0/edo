@@ -917,8 +917,11 @@ function angle3d(u, v=[0,0,1]) = atan2(norm(cross(v,u)), u*v);
 // signed angle from vector u to v in reference to a plane with normal vector n
 function s_angle3d(u, v, n) = atan2(cross(v,u)*n, u*v);
 
-// calculate XYZ-convention Euler angles (may cause gimbal lock) from directional vector, usage: m4_euler(euler(v))
+// calculate XYZ-convention Euler angles (may cause gimbal lock) from directional vector, e.g. m4_euler(euler(v))
 function euler(v) = let(m=m3_rotate(v)) [atan2(m[1][2], m[2][2]), asin(-m[0][2]), atan2(m[0][1], m[0][0])];
+
+// calculate directional unit vector from Euler angles (XYZ-convention), e.g. eulerv3($vpr)
+function eulerv3(e) = [sin(e.x)*sin(e.z)+cos(e.x)*sin(e.y)*cos(e.z),-sin(e.x)*cos(e.z)+sin(e.y)*sin(e.z)*cos(e.x),cos(e.x)*cos(e.y)];
 
 // return 1 or -1 if colinear, zero otherwise, t=threshold
 function colinear(u, v, t=0.9999) = let(d=(u*v)/norm(u)/norm(v)) abs(d)>t ? sign(d) : 0;

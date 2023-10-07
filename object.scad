@@ -42,7 +42,7 @@ module bracket(dm, fold=0.5, r=5, a=90) {
 
 // a basic case based on a profile, children will be placed on the bottom of bin
 // h=height, d=lid height, t=thickness (outwards, can be negative), g=gap, sp=spacer
-// view={undef:print, 0:cross-section, 1:bin, 2:lid, 3:closed, 4:profile}
+// view={undef:print, 0:cross-section, 1:bin, 2:lid, 3:closed, 4:debug}
 module basic_case(profile, h=25, d=10, t=2.8, g=0.1, sp=0, top=true, bottom=true, view) {
   a = abs(t);
   h = max(a*4-0.2, h);
@@ -55,7 +55,7 @@ module basic_case(profile, h=25, d=10, t=2.8, g=0.1, sp=0, top=true, bottom=true
 
   // lid cross section
   c1 = concat2d([
-    step2d([[0,a-d],[0.001,0],[a/2-0.001,0],[0,d-a]]),
+    step2d([[0,a-d+0.1],[0.001,0],[a/2-0.001,0],[0,d-a-0.1]]),
     ccw_path([0,0], [-a+0.01,a], $fs=$fs/2)
   ], [t/2,-a]);
 
@@ -63,29 +63,29 @@ module basic_case(profile, h=25, d=10, t=2.8, g=0.1, sp=0, top=true, bottom=true
   c2 = concat2d([
     step2d([[0.001,0],[g-0.001,0]]), // extra point for gap
     ccw_path([0,0], [a,a]),
-    step2d([[0,h-d-a-0.2],[-a/2-g,0],[0,d-a-1.2]]),
+    step2d([[0,h-d-a-0.1],[-a/2-g,0],[0,d-a-1.1]]),
     ccw_path([0,0], [-a/2,0], po=[-a/4,0], $fs=$fs/2),
     step2d([[0,-(h-2*a-1.4)]])
   ], [t<0?-a-g:-g,0]);
 
   if (view==undef) { // print
-    scatter(box2dw(profile)+abs(t)*4+sp) {
+    scatter(e+10+sp) {
       basic_case(p, h, d, t, g, sp, top, bottom, 1) if ($children>0) children(0); // bin
       basic_case(p, h, d, t, g, sp, top, bottom, 2) if ($children>1) children(1); // lid
     }
   } else select(view) {
-    // 0: cross-section
+    // 0 cross-section
     clip([e*1.2,e*1.2,h], cy=0) {
       basic_case(p, h, d, t, g, sp, top, bottom, 1) if ($children>0) children(0); // bin
-      ascend(h-0.1) flipy() basic_case(p, h, d, t, g, sp, top, bottom, 2) if ($children>1) children(1); // lid
+      ascend(h) flipy() basic_case(p, h, d, t, g, sp, top, bottom, 2) if ($children>1) children(1); // lid
     }
-    // 1: bin + children
+    // 1 bin + children
     union() {
       m2 = [for (i=c2) force3d(offset2d(profile, i[0]), i[1])];
       layered_block(m2, loop=!bottom);
       ascend(t-0.01) children();
     }
-    // 2: lid - children
+    // 2 lid - children
     flipy() {
       m1 = [for (i=c1) force3d(offset2d(profile, i[0]), i[1])];
       difference() {
@@ -93,20 +93,24 @@ module basic_case(profile, h=25, d=10, t=2.8, g=0.1, sp=0, top=true, bottom=true
         children();
       }
     }
-    // 3: closed
+    // 3 closed
     union() {
       basic_case(p, h, d, t, g, sp, top, bottom, 1) if ($children>0) children(0); // bin
       ascend(h-0.1) flipy() basic_case(p, h, d, t, g, sp, top, bottom, 2) if ($children>1) children(1); // lid
     }
-    // 4: profile only
-    plot(p, color="red", dup=true);
+    // 4 debug
+    union() {
+      color("red", 0.2) %plot(p, dup=true);
+      plot(shift2d(c1, [0,h/2]), 0.1, color="gold");
+      plot(shift2d(c2, [0,-h/2]), 0.1,  color="cyan");
+    }
   }
 }
 
 // a case based on a profile, with a cover on top for decorations, children will be placed on the bottom of bin
 // h=height, d=lid height, t=thickness, s=cover thickness, b=border, g=gap, m=dimple diameter, sp=spacer
-// view={undef:print 0:cross-section, 1:bin, 2:lid, 3:cover, 4:closed, 5:profile}
-module cover_case(profile, h=25, d=8, t=2.8, s=1.2, b=2, g=0.1, m=0, sp=0, view) {
+// view={undef:print 0:cross-section, 1:bin, 2:lid, 3:cover, 4:closed, 5:debug}
+module cover_case(profile, h=25, d=8, t=2.8, s=1.2, b=2, g=0.1, m=0, sp=0, rise=true, view) {
   a = abs(t);
   h = max(a*4-0.2, h);
   d = max(a*2, min(h-a, d));
@@ -118,61 +122,66 @@ module cover_case(profile, h=25, d=8, t=2.8, s=1.2, b=2, g=0.1, m=0, sp=0, view)
   u = 0.5; // upper stopper radius
 
   // lid cross sections
+  q = a/4;
   c1 = concat2d([
-      step2d([[0,-a/2],[b,0],[0,-s+u-0.3]]),
+      step2d([[-q,-q],[0,q-a/2],[b,0],[0,-s+u-0.3]]),
       cw_path([0,0], [-u,-u]),
       step2d([[-r+u,0]]),
       cw_path([0,0], [r,-r]),
-      step2d([[0,-d+a/2+s+r+0.3],[a/2,0],[0,d-a/2]]),
+      step2d([[0,-d+a/2+s+r+0.4],[a/2,0],[0,d-a/2-0.1]]),
       ccw_path([0,0], [-a/2,a/2])
-  ], [t/2-b,0]);
+  ], [t/2-b+q,0]);
 
   // bin cross sections
   c2 = concat2d([
       step2d([[0.001,0],[g-0.001,0]]), // extra point for bottom
       ccw_path([0,0], [a,a]),
-      step2d([[0,h-d-a-0.2],[-a/2-g,0],[0,d-a/2-s-1.2]]),
+      step2d([[0,h-d-a-0.1],[-a/2-g,0],[0,d-a/2-s-1.1]]),
       ccw_path([0,0], [-a/2,0], po=[-a/4,0]),
       step2d([[0,-(h-2*a-1.4)]])
   ], [t<0?-a-g:-g,0]);
   
   if (view==undef) { // all parts
-    scatter(e+abs(t)*4+sp) {
-      cover_case(p, h, d, t, s, b, g, m, sp, 1) children(); // bin
-      cover_case(p, h, d, t, s, b, g, m, sp, 2); // lid
-      cover_case(p, h, d, t, s, b, g, m, sp, 3); // cover
+    scatter(e+10+sp) {
+      cover_case(p, h, d, t, s, b, g, m, sp, rise, 1) children(); // bin
+      cover_case(p, h, d, t, s, b, g, m, sp, rise, 2); // lid
+      cover_case(p, h, d, t, s, b, g, m, sp, rise, 3); // cover
     }
   } else child(view) {
-    // cross-section
+    // 0 cross-section
     clip([e*1.2,e*1.2,h], cy=0) {
-      cover_case(p, h, d, t, s, b, g, m, sp, 1); // bin
-      ascend(h-0.1) flipy() cover_case(p, h, d, t, s, b, g, m, sp, 2); // lid
-      ascend(h-a/2-s-0.2) cover_case(p, h, d, t, s, b, g, m, sp, 3); // cover
+      cover_case(p, h, d, t, s, b, g, m, sp, rise, 1); // bin
+      ascend(h-0.1) flipy() cover_case(p, h, d, t, s, b, g, m, sp, rise, 2); // lid
+      ascend(h-a/2-s-0.2) cover_case(p, h, d, t, s, b, g, m, sp, rise, 3); // cover
     }
-    // bin
+    // 1 bin
     union() {
       m2 = [for (i=c2) force3d(offset2d(profile, i[0]), i[1])];
       layered_block(m2, loop=false);
       ascend(t-0.01) children();
     }
-    // lid
+    // 2 lid
     flipy() {
       m1 = [for (i=c1) force3d(offset2d(profile, i[0]), i[1])];
       layered_block(m1, loop=true);
     }
-    // cover
+    // 3 cover
     punch(locs=[c], m=m, zz=[s+a/2-0.2,10]) {
-      solid(offset2d(profile, t/2-0.1), s);
-      ascend(s-0.3) cookie_extrude(offset2d(profile, t/2-b-1), a/2+0.3, origin=c);
+      solid(offset2d(profile, t/2-0.1), s-0.2);
+      if (rise) ascend(s-0.3) cookie_extrude(offset2d(profile, t/2-b-1), a/2+0.3, origin=c);
     }
-    // closed
+    // 4 closed
     union() {
-      cover_case(p, h, d, t, s, b, g, m, sp, 1); // bin
-      ascend(h-0.1) flipy() cover_case(p, h, d, t, s, b, g, m, sp, 2); // lid
-      ascend(h-a/2-s-0.2) cover_case(p, h, d, t, s, b, g, m, sp, 3); // cover
+      cover_case(p, h, d, t, s, b, g, m, sp, rise, 1); // bin
+      ascend(h-0.1) flipy() cover_case(p, h, d, t, s, b, g, m, sp, rise, 2); // lid
+      ascend(h-a/2-s-0.2) cover_case(p, h, d, t, s, b, g, m, sp, rise, 3); // cover
     }
-    // profile
-    plot(p, color="red");
+    // 5 debug
+    union() {
+      color("red", 0.2) %plot(p, dup=true);
+      plot(shift2d(c1, [0,h/2]), 0.1, color="gold");
+      plot(shift2d(c2, [0,-h/2]), 0.1,  color="cyan");
+    }
   }
 }
 
@@ -186,16 +195,16 @@ module hinge_case(dm, t=3, r=0, f=0, e=0, g=0, view) {
     }
   }
   else child(view) {
-    // cross-section
+    // 0 cross-section
     clip([dm[0]+t*3,dm[1]+t*3,dm[2]+t*3], cy=0) {
       color("wheat") hinge_bin(dm, t, r, f, e, g);
       color("pink") hinge_lid(dm, t, r, f, e);
     }
-    // bin
+    // 1 bin
     hinge_bin(dm, t, r, f, e, g);
     // lid
     flipy(h=dm[2]+t*2) hinge_lid(dm, t, r, f, e);
-    // closed
+    // 2 closed
     union() {
       color("wheat") hinge_bin(dm, t, r, f, e, g);
       color("pink") hinge_lid(dm, t, r, f, e);
