@@ -41,12 +41,13 @@ module bracket(dm, fold=0.5, r=5, a=90) {
 }
 
 // a basic case based on a profile, children will be placed on the bottom of bin
-// h=height, d=lid height, t=thickness (outwards, can be negative), g=gap, sp=spacer
+// h=outside height, d=lid height, t=thickness (outwards, can be negative), g=lid gap, b=mouth spacing, sp=spread
 // view={undef:print, 0:cross-section, 1:bin, 2:lid, 3:closed, 4:debug}
-module basic_case(profile, h=25, d=10, t=2.8, g=0.1, sp=0, top=true, bottom=true, view) {
+module basic_case(profile, h=25, d=10, t=2.8, g=0, b=0, sp=0, top=true, bottom=true, view) {
   a = abs(t);
-  h = max(a*4-0.2, h);
-  d = max(a*2, min(h-a, d));
+  hh = max(a*4-0.2, h-a*2); // internal height
+  dd = max(a*2, min(hh+a-0.2, d));
+  bb = min(dd-a*2, b);
   o = encircle2d(profile);
   e = o[1]*2; // diameter of profile
   p = shift2d(profile, -o[0]); // center profile
@@ -55,29 +56,28 @@ module basic_case(profile, h=25, d=10, t=2.8, g=0.1, sp=0, top=true, bottom=true
 
   // lid cross section
   c1 = concat2d([
-    step2d([[0,a-d+0.1],[0.001,0],[a/2-0.001,0],[0,d-a-0.1]]),
-    ccw_path([0,0], [-a+0.01,a], $fs=$fs/2)
-  ], [t/2,-a]);
+    step2d([if (b>0) [0,-bb],[(a+g)/2,0],[0,a-dd+bb+0.1],[(a-g)/2,0],[0,dd-a-0.1]]),
+    ccw_path([0,0], [-a,a], $fs=$fs/2)
+  ], [t<0?t:0,-a]);
 
   // bin cross section
   c2 = concat2d([
-    step2d([[0.001,0],[g-0.001,0]]), // extra point for gap
     ccw_path([0,0], [a,a]),
-    step2d([[0,h-d-a-0.1],[-a/2-g,0],[0,d-a-1.1]]),
-    ccw_path([0,0], [-a/2,0], po=[-a/4,0], $fs=$fs/2),
-    step2d([[0,-(h-2*a-1.4)]])
-  ], [t<0?-a-g:-g,0]);
+    step2d([[0,hh-dd+a-0.1],[-(a+g)/2,0],[0,dd-a-bb-1.1]]),
+    ccw_path([0,0], [-(a-g)/2,0], po=[-(a-g)/4,0], $fs=$fs/2),
+    step2d([[0,bb-(hh-1.4)]])
+  ], [t<0?-a:0,0]);
 
   if (view==undef) { // print
     scatter(e+10+sp) {
-      basic_case(p, h, d, t, g, sp, top, bottom, 1) if ($children>0) children(0); // bin
-      basic_case(p, h, d, t, g, sp, top, bottom, 2) if ($children>1) children(1); // lid
+      basic_case(p, h, d, t, g, b, sp, top, bottom, 1) if ($children>0) children(0); // bin
+      basic_case(p, h, d, t, g, b, sp, top, bottom, 2) if ($children>1) children(1); // lid
     }
-  } else select(view) {
+  } else select(view) {    // 1 bin + children
     // 0 cross-section
     clip([e*1.2,e*1.2,h], cy=0) {
-      basic_case(p, h, d, t, g, sp, top, bottom, 1) if ($children>0) children(0); // bin
-      ascend(h) flipy() basic_case(p, h, d, t, g, sp, top, bottom, 2) if ($children>1) children(1); // lid
+      basic_case(p, h, d, t, g, b, sp, top, bottom, 1) if ($children>0) children(0); // bin
+      ascend(h) flipy() basic_case(p, h, d, t, g, b, sp, top, bottom, 2) if ($children>1) children(1); // lid
     }
     // 1 bin + children
     union() {
@@ -95,8 +95,8 @@ module basic_case(profile, h=25, d=10, t=2.8, g=0.1, sp=0, top=true, bottom=true
     }
     // 3 closed
     union() {
-      basic_case(p, h, d, t, g, sp, top, bottom, 1) if ($children>0) children(0); // bin
-      ascend(h-0.1) flipy() basic_case(p, h, d, t, g, sp, top, bottom, 2) if ($children>1) children(1); // lid
+      basic_case(p, h, d, t, g, b, sp, top, bottom, 1) if ($children>0) children(0); // bin
+      flipy(h=h-0.1) basic_case(p, h, d, t, g, b, sp, top, bottom, 2) if ($children>1) children(1); // lid
     }
     // 4 debug
     union() {
@@ -110,7 +110,7 @@ module basic_case(profile, h=25, d=10, t=2.8, g=0.1, sp=0, top=true, bottom=true
 // a case based on a profile, with a cover on top for decorations, children will be placed on the bottom of bin
 // h=height, d=lid height, t=thickness, s=cover thickness, b=border, g=gap, m=dimple diameter, sp=spacer
 // view={undef:print 0:cross-section, 1:bin, 2:lid, 3:cover, 4:closed, 5:debug}
-module cover_case(profile, h=25, d=8, t=2.8, s=1.2, b=2, g=0.1, m=0, sp=0, rise=true, view) {
+module cover_case(profile, h=25, d=8, t=2.8, s=1.2, b=2, g=0, m=0, sp=0, rise=false, view) {
   a = abs(t);
   h = max(a*4-0.2, h);
   d = max(a*2, min(h-a, d));
@@ -130,7 +130,7 @@ module cover_case(profile, h=25, d=8, t=2.8, s=1.2, b=2, g=0.1, m=0, sp=0, rise=
       cw_path([0,0], [r,-r]),
       step2d([[0,-d+a/2+s+r+0.4],[a/2,0],[0,d-a/2-0.1]]),
       ccw_path([0,0], [-a/2,a/2])
-  ], [t/2-b+q,0]);
+  ], [t<0?t/2-b+q:-b+q,0]);
 
   // bin cross sections
   c2 = concat2d([
@@ -139,7 +139,7 @@ module cover_case(profile, h=25, d=8, t=2.8, s=1.2, b=2, g=0.1, m=0, sp=0, rise=
       step2d([[0,h-d-a-0.1],[-a/2-g,0],[0,d-a/2-s-1.1]]),
       ccw_path([0,0], [-a/2,0], po=[-a/4,0]),
       step2d([[0,-(h-2*a-1.4)]])
-  ], [t<0?-a-g:-g,0]);
+  ], [t<0?-a-g:-t/2-g,0]);
   
   if (view==undef) { // all parts
     scatter(e+10+sp) {
@@ -167,8 +167,8 @@ module cover_case(profile, h=25, d=8, t=2.8, s=1.2, b=2, g=0.1, m=0, sp=0, rise=
     }
     // 3 cover
     punch(locs=[c], m=m, zz=[s+a/2-0.2,10]) {
-      solid(offset2d(profile, t/2-0.1), s-0.2);
-      if (rise) ascend(s-0.3) cookie_extrude(offset2d(profile, t/2-b-1), a/2+0.3, origin=c);
+      solid(offset2d(profile, -0.1), s-0.2);
+      if (rise) ascend(s-0.3) cookie_extrude(offset2d(profile, -b-1), a/2+0.3, origin=c);
     }
     // 4 closed
     union() {
