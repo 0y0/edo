@@ -573,7 +573,9 @@ function random_profile(d=50, min=4, max=7, s=5, seed) = let(r=rnd_seed(seed))
 function radiate2d(path, n, i=0) = concat(i==0 ? path : path*m2_rotate(360/n*i), i<n-1 ? radiate2d(path, n, i+1) : []);
 
 // combine a list of 2D paths end-to-end, a single point in the list is a vector, from=override first point
-function concat2d(paths=[], from, i=0) = let(s=paths[i]) s[0]==undef ? [] : let(p=is_list(s[0])?s:[[0,0],s], d=ifundef(from, p[0])-p[0], k=len(p)) concat([for (i=[(i==0?0:1):k-1]) p[i]+d], concat2d(paths, p[k-1]+d, i+1));
+function concat2d(paths=[], from, i=0) = let(e=paths[i]) e==undef ? [] : e==[] ? concat2d(paths, from, i+1) :
+  let(s=is_list(e[0])?e:[e], p=len(s)>1?s:concat([[0,0]],s), k=len(p), d=ifundef(from, p[0])-p[0])
+  concat([if (k>1) for (j=[(i==0?0:1):k-1]) p[j]+d], concat2d(paths, p[k-1]+d, i+1));
 
 // similar to concat2d except that each step is a single vector instead of a path
 function step2d(vectors, from=[0,0], i=0, m) = let(m=ifundef(m, len(vectors)), p=i==0?from:vectors[i-1]+from) concat([p], i==m ? [] : step2d(vectors, p, i+1, m));
@@ -2282,7 +2284,7 @@ module mesh_block(points, h=0, zscale=1) {
   polyhedron(flatten(concat(mesh, [corners])), concat(top, base), convexity=9);
 }
 
-// generate a mesh block from a set of points representing n layers of contours (no need to be coplanar)
+// generate a mesh block from a set of points representing n layers of flat contours (no need to be coplanar)
 // layers=[L1, L2, ... Lm] where each L is a list of 3D points [p1, p2, p3, ... pn] of same length n
 // invert=reverse layers, s=contour offset for twisted loop
 module layered_block(layers, loop=false, invert=false, s=0) {
