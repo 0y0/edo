@@ -2045,7 +2045,7 @@ module nut_holes(locs=[[0,0,0]], m=3, pitch=0.5, h=5, gap=-0.4, e=[0,0,0]) {
 }
 
 // an insert for a screw, m=screw_diameter, h=height, b=solid_range, pitch=screw_pitch, gap=extra_gap, xz=fillet_size
-module screw_prop(m=[3,5], h=[0,10], b=[0,0], pitch=0.5, gap=0.1, xz=[1,2]) {
+module screw_prop(m=[3,5], h=[0,10], b=[0,0], pitch=0.5, gap=0.1, xz=[2,2]) {
   m0 = is_list(m) ? m[0] : m;
   m1 = is_list(m) ? m[1] : m+3;
   h0 = is_list(h) ? h[0] : 0;
@@ -2057,7 +2057,9 @@ module screw_prop(m=[3,5], h=[0,10], b=[0,0], pitch=0.5, gap=0.1, xz=[1,2]) {
     ascend(h0) fillet_pipe(m1, h=hh, xz=xz, m=0);
 }
 
-// an insert for heatset nuts, d=outer_diameter, h=height, w=inner_diameter, m=screw_diameter (3.3 for M2, 4.0 for M3)
+// an insert for heatset nuts, d=outer_diameter, h=height, w=inner_diameter (3.3 for M2, 4.0 for M3), m=screw_diameter
+// for M2 screws: heatset_prop(h=h, w=3.3, m=2)
+// for M3 screws: heatset_prop(h=h)
 module heatset_prop(d=8, h=3, w=4, m=3, fillet=2) {
   fillet_pipe(d=max(m+4, d), h=h, m=w, xz=[max(0,opt(fillet,0)),opt(fillet,1,3)]);
   if (h>3) pipe(d=w+2, h=h-3, m=m+0.2);
