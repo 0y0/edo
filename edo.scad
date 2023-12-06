@@ -840,7 +840,7 @@ arc_trace = function(t, f=0.1) let(r=(f*f+0.25)/f/2, k=sqrt(r*r-0.25), s=asin(0.
 bridge_trace = function(t, f=0.1) let(r=(f*f+0.25)/f/2, x=t-0.5) [t,sqrt(r*r-x*x)+f-r]; // t spans x-axis
 
 // ====================================================================
-// 2D paths between points
+// 2D paths between control points
 // ====================================================================
 
 function line_path(p, from=[0,0]) = [from,p];
@@ -850,13 +850,14 @@ function ccw_path(p1, p2, f=2, i=0, po) = let(m=(p1+p2)/2, ov=orth2d(p2-p1), u=u
 function cw_path(p1, p2, f=2, i=0, po) = let(m=(p1+p2)/2, ov=orth2d(p1-p2), u=unit(ov))
   let(o=m+(po?u*(po-m)*u:ov/f), r=norm(p1-o)) norm(p1-p2)<=2*$fs ? i==0 ? [p1,p2] : [p1] :
   let(pm=o-r*u) concat(cw_path(p1, pm, f, i+1, o), cw_path(pm, p2, f, i+1, o), i==0?[p2]:[]);
-function sin_path(p1, p2, n=1, m=0.5) = let(v=p2-p1, ov=orth2d(v)*m) [for (t=quanta(n*90, end=1)) p1+t*v+sin(t*n*360)*ov];
-function cos_path(p1, p2, n=1, m=0.5) = let(v=p2-p1, ov=orth2d(v)*m) [for (t=quanta(n*90, end=1)) p1+t*v+cos(t*n*360)*ov];
+function sin_path(p1, p2, m=0.5, n=1) = let(v=p2-p1, ov=orth2d(v)*m, d=floor(norm(v)/2/$fs)) [for (t=quanta(d, end=1)) p1+t*v+sin(t*n*360)*ov];
+function cos_path(p1, p2, m=0.5, n=1) = let(v=p2-p1, ov=orth2d(v)*m, d=floor(norm(v)/2/$fs)) [for (t=quanta(d, end=1)) p1+t*v+cos(t*n*360)*ov];
 function peanut_path(p1, p2, w=10, f=1.2) = let(m=(p1+p2)/2, e=p1-p2, h=norm(e), c=e[0]/h, s=e[1]/h, v=h/2) [for (t=quanta(ceil(perimeter(v, w)/8/$fs)*2)) let(a=t*360) m + [cos(a)*(v+f*w/2),(2*sin(a)-sin(a)^5)*w/2] * [[c,s],[-s,c]]];
 function airfoil_path(p1, p2, w=5, f=0.3, b, s) = let(u=unit([p1.y-p2.y,p2.x-p1.x]), a1=opt(f,0,0.3), a2=is_list(f)?opt(f,1):0, m=(p1+p2)/2+ifundef(b,[0,0]), p11=p1-a1*u, p12=p1+a1*u, p21=p2-a2*u, p22=p2+a2*u, pm1=m-w*u/2, pm2=m+w*u/2) smooth([p11,pm1,p21,p22,pm2,p12], div=s, loop=true); // f=tip shaping, b=bias, s=resolution
+function thread_path(p1, p2, m=0.5, n, seed) = let(v=p2-p1, d=norm(v), n=ifundef(n, floor(d/7)), u=orth2d(v)*m/d, s=rnd_seed(seed)) smooth([for (t=quanta(n+1, end=1)) t==0 ? p1 : t==1 ? p2 : p1+v*t+u*rnd(-1, 1, seed=s+t*999)]);
 
 // ====================================================================
-// 3D paths between points
+// 3D paths between control points
 // ====================================================================
 
 function ruler_path(p1, p2, n) = let(d=p2-p1) [for (t=quanta(n?n:ceil(norm(d)/$fs), end=1)) p1+t*d]; // 2D also works
@@ -1425,7 +1426,7 @@ module basin(profile, h=5, t=1, bottom=0, inflate=0, r=2) {
 }
 
 // a strip resting on its side along path, h=height, t=thickness, r=rounding, f=vertical fillet, s=path softening
-module strip(path, h=10, t=1, r=0, f=0, s=0) {
+module strip(path, h=10, t=1, r=0, f=0, s=0, center=false) {
   path = soften(path, s, loop=false);
   f = min(f, h/2-1);
   r = min(r, h/2-f);
@@ -1438,7 +1439,7 @@ module strip(path, h=10, t=1, r=0, f=0, s=0) {
   m0 = r<0.5 ? [] : sweep_layers([for (i=c0) pad_path(t, h+i[1]*r*2, r=f)], [for (i=c0) as3d(path[0]+i[0]*e0)]);
   m1 = r<0.5 ? [] : sweep_layers([for (i=c1) pad_path(t, h+i[1]*r*2, r=f)], [for (i=c1) as3d(pp[k-1]+i[0]*e1)]);
   m = concat(m1, sweep_pipe(pad_path(t, h, r=f), force3d(r<0.5?path:pp)), m0);
-  ascend(h/2) layered_block(m);
+  ascend(center?0:h/2) layered_block(m);
 }
 
 // a udon noodle along path, t=thickness, c=cap length (default is t/2)
@@ -1887,6 +1888,7 @@ module drill(locs=[[0,0,0]], xx, yy, zz, m=3, h, t, g=0, enable=true, debug=fals
       pt = [rx[1],ry[1],rz[1]];
       pp = ph-pt;
       for (p=locs) highlight(debug) translate(p+pt) orient(pp) hole([0,0], [0,norm(pp)], m, h, t, g);
+      if (debug) %mark(locs);
     }
   }
 }
@@ -2304,13 +2306,17 @@ module layered_block(layers, loop=false, invert=false, s=0) {
 }
 
 // create a layered shell by thickening each layer outward (or inward if negative), requires coplanar layers
-// skip=how many layers to skip at the bottom, to create a floor
-module layered_shell(layers, t=1.6, skip=0, flat=true) {
+// b=bottom thickness, flat=flat top
+module layered_shell(layers, t=1.6, b=0, flat=true) {
   if (t!=0) {
+    a = abs(t);
     e = len(layers)-1;
-    m1 = [for (i=[e:-1:0]) let(l=layers[i], c=offset2d(l, t)) [for (j=[0:len(l)-1]) [c[j][0],c[j][1],l[j][2]]]];
-    m2 = flat ? [] : [let(p=layers[e], h=p[0][2], tt=abs(t)) for (i=snip(arc_path(tt, [0,180]), 1, 1)) force3d(offset2d(p, t/2-i[0]), h+i[1])];
-    layered_block(snip(reverse(concat(layers, m2, m1), enable=t>0), skip), loop=skip==0);
+    s = [for (l=layers) force3d(offset2d(l, t), l[0][2])];
+    m1 = t<0 ? layers : s;
+    m2 = [for (l=t<0 ? s : layers) if (l[0][2]>=b-a/2) l];
+    m3 = reverse(b>0 ? [for (i=[0:len(m2)-1]) let(l=m2[i]) i==0 ? force3d(offset2d(l, -a/2), b) : l] : m2);
+    mm = flat ? [] : [let(p=m1[e]) for (i=snip(arc_path(a, [0,180]), 1, 1)) force3d(offset2d(p, i[0]-a/2), p[0][2]+i[1])];
+    layered_block(concat(m1, mm, m3), loop=b==0);
   }
 }
 
