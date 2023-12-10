@@ -2259,48 +2259,46 @@ module file_emboss(file, p, w, d=0.4, inflate=0, color) {
   color(color) translate(p-[0,0,0.001]) file_extrude(file, h=d, xsize=w, inflate=inflate);
 }
 
-// generate a mesh block from a set of mxn points representing a rectangular surface above x-y plane
-// points=[L1, L2, L3, ... Lm] where each L is a list of 3D points [p1, p2, p3, ... pn] of length n
-module mesh_block(points, h=0, zscale=1) {
-  xsteps = len(points[0])-1;
-  xlow = points[0][0][0];
-  xhigh = points[0][xsteps][0];
-  ysteps = len(points)-1;
-  ylow = points[0][0][1];
-  yhigh = points[ysteps][0][1];
-  idx = (xsteps+1) * (ysteps+1);
-
-  mesh = [for (y=[0:ysteps]) shift3d(scale3d(points[y],[1,1,zscale]),[0,0,h])];
-  corners = [[xlow,ylow,0],[xhigh,ylow,0],[xhigh,yhigh,0],[xlow,yhigh,0]];
-
-  top = [for (j=[0:ysteps-1], i=[0:xsteps-1], f=[1,0]) f ?
-    [j*(xsteps+1)+i, (j+1)*(xsteps+1)+i, j*(xsteps+1)+i+1] :
-    [j*(xsteps+1)+i+1, (j+1)*(xsteps+1)+i, (j+1)*(xsteps+1)+i+1]
-  ];
-
-  base = [
-    concat([for (i=[0:xsteps]) i], [idx+1, idx, 0]),
-    concat([for (i=[0:xsteps]) idx-i-1], [idx+3, idx+2, idx-1]),
-    concat([for (i=[1:ysteps+1]) idx-i*(xsteps+1)], [idx, idx+3, idx-xsteps-1]),
-    concat([for (i=[0:ysteps]) (i+1)*(xsteps+1)-1], [idx+2, idx+1, xsteps]),
-    [idx, idx+1, idx+2, idx+3]
-  ];
-  polyhedron(flatten(concat(mesh, [corners])), concat(top, base), convexity=9);
+// generate a solid block from a set of m*n points representing a rectangular surface above x-y plane
+// grid=[R1, R2, R3, ... Rm] where each R is a row of 3D points [p1, p2, p3, ... pn] of same length n
+module grid_block(grid, h=0, zscale=1) {
+  grid = [for (row=grid) [for (p=row) [p[0],p[1],p[2]*zscale+h]]];
+  grid_extrude(grid, h, function(p, t) force2d(p));
 }
 
-// generate a mesh block from a set of points representing n layers of flat contours (no need to be coplanar)
-// layers=[L1, L2, ... Lm] where each L is a list of 3D points [p1, p2, p3, ... pn] of same length n
+// extrude a grid of m*n points by deriving the bottom layer using function fn(p, t)
+// grid=[R1, R2, R3, ... Rm] where each R is a row of 3D points [p1, p2, p3, ... pn] of same length n
+// fn defaults to extruding downward along z-axis by thickness t
+module grid_extrude(grid, t=1, fn) {
+  n = len(grid);
+  m = len(grid[0]);
+  g = n * m;
+  fn = ifundef(fn, function(p, t) p+[0,0,-1]*t);
+  if (g>0) {
+    v = concat([for (j=grid, i=j) fn(i, t)], [for (i=grid) each i]);
+    f = concat(
+      [for (j=[0:n-2], i=[0:m-2]) let(a=m*j+i) each [[a,m+a+1,m+a],[a,a+1,m+a+1]]],
+      [for (j=[0:n-2], i=[0:m-2]) let(a=g+m*j+i) each [[a,m+a,m+a+1],[a,m+a+1,a+1]]],
+      [for (i=[0:m-2]) let(a=g-i-1) each [[i,g+i,g+i+1],[i,g+i+1,i+1],[a,g+a,g+a-1],[a,g+a-1,a-1]]],
+      [for (i=[0:n-2]) let(a=m*i, b=m*(i+1)-1) each [[a,g+a+m,g+a],[a,a+m,g+m+a],[b+m,b,g+b],[b+m,g+b,g+m+b]]]
+    );
+    polyhedron(v, f, convexity=9);
+  }
+}
+
+// generate a solid block from a set of points representing n layers of 2-manifold profiles (no need to be coplanar)
+// layers=[L1, L2, ... Lm] where each L is a profile of 3D points [p1, p2, p3, ... pn] of same length n
 // invert=reverse layers, s=contour offset for twisted loop
 module layered_block(layers, loop=false, invert=false, s=0) {
-  k = len(layers);
-  n = len(layers[0]);
-  if (k>0 && n>0) {
+  n = len(layers);
+  k = len(layers[0]);
+  if (n>0 && k>0) {
     v = [for (i=indices(layers, invert)) each layers[i]];
     g = len(v);
-    f = [for (j=[0:k-2], i=[0:n-1]) let(a=n*j, b=n*((j+1)%k), c=(i+1)%n) each [[a+i,b+c,a+c],[a+i,b+i,b+c]]];
+    f = [for (j=[0:n-2], i=[0:k-1]) let(a=k*j, b=k*((j+1)%n), c=(i+1)%k) each [[a+i,b+c,a+c],[a+i,b+i,b+c]]];
     polyhedron(v, loop ?
-        concat(f, [for (i=[0:n-1]) let(a=n*k-n, b=(i+s)%n, c=(i+1)%n) each [[a+b,c,a+(c+s)%n],[a+b,i,c]]]) :
-        concat(f, [[for (i=[0:n-1])i], [for (i=[1:n])g-i]]),
+        concat(f, [for (i=[0:k-1]) let(a=k*n-k, b=(i+s)%k, c=(i+1)%k) each [[a+b,c,a+(c+s)%k],[a+b,i,c]]]) :
+        concat(f, [[for (i=[0:k-1])i], [for (i=[1:k])g-i]]),
       convexity=10);
   }   
 }
