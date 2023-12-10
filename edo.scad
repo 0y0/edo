@@ -986,8 +986,8 @@ function orient3d(points, n, from=[0,0,1], a=0) = points * m3_spin(a) * m3_rotat
 // relocate 2D/3D points by spinning an angle a, then rotate z-axis to n, then translate to point p
 function stage3d(points, n=[0,0,1], p=[0,0,0], a=0) = m4_transform(points, m4_spin(a) * m4_rotate(n) * m4_translate(p));
 
-// wrap points on xy-plane around a vertical cylinder of diameter d, spanning angle a, reference width w
-function polar3d(points, d=20, a=360, w) = let(w=ifundef(w, box2dw(points)), r=d/2) [for (p=points) let(t=p[0]*a/w, e=ifundef(p[2],0)) [cos(t)*(r+e), sin(t)*(r+e), p[1]*(d*PI*a)/(w*360)]];
+// wrap points on xy-plane around a vertical cylinder of diameter d, span angle a, optional reference wide w & scale s
+function polar3d(points, d=20, a=360, w, s) = let(w=ifundef(w, box2dw(points)), r=d/2, k=a/w, s=ifundef(s, d*PI*k/360)) [for (p=points) let(t=p[0]*k, m=r+ifundef(p[2],0)) [sin(t)*m, -cos(t)*m, p[1]*s]];
 
 // scale 2D points onto the surface of a sphere linearly with respect to origin
 function land(points, r) = [for (p=points) unit(p)*r];
@@ -2283,6 +2283,15 @@ module grid_extrude(grid, t=1, fn) {
       [for (i=[0:n-2]) let(a=m*i, b=m*(i+1)-1) each [[a,g+a+m,g+a],[a,a+m,g+m+a],[b+m,b,g+b],[b+m,g+b,g+m+b]]]
     );
     polyhedron(v, f, convexity=9);
+  }
+}
+
+// extrude a profile wrapped on a cylinder of diameter d, thickness t, spanning angle a
+module polar_extrude(profile, d, t=-1, a=75) {
+  if (t!=0) {
+    w = box2dw(profile);
+    f = d*PI*a/(360*w);
+    layered_block([polar3d(profile, t<0?d+t*2:d, a, s=f), polar3d(profile, t<0?d:d+t*2, a, s=f)]);
   }
 }
 
