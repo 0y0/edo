@@ -23,6 +23,9 @@ $NOW = undef; // execution timestamp
 // math functions
 // ====================================================================
 
+// test for a finite number
+function finite(n) = is_num(n) && n!=$inf;
+
 // truncate number (or array of numbers) to d decimal places
 function trunc(n, d=2) = let(s=pow(10,d)) is_list(n) ? [for(i=n) floor(i*s)/s] : floor(n*s)/s;
 
@@ -32,8 +35,8 @@ function round2(n, d=0) = round(n*10^d)/10^d;
 // round n to the nearest multiple of d
 function mof(n, d=2) = round(n/d)*d;
 
-// boolean function for exclusive or
-function xor(a, b) = (a&&!b)||(!a&&b);
+// optimized boolean function for exclusive-or
+function xor(a, b) = !a != !b;
 
 // hyperbolic functions
 function sinh(t) = (exp(t)-exp(-t))/2;
@@ -209,6 +212,9 @@ function nearby(array, idx, r=1, loop=true) = let(k=len(array)) [for (i=[idx-r:i
 
 // split array into n parts (uniformity not optimal)
 function split(array, n) = [let (k=len(array), m=ceil(k/n)) for (j=[0:n-1]) [for (i=[m*j:m*j+m-1]) if (i<k) array[i]]];
+
+// split array into islands given that value d is water (defaults to undef)
+function island(array, d, /*private*/ i) = let(k=len(array)) i==undef ? [for (j=[0:k-1]) if (j==0 || array[j-1]==d) let(s=island(array, d, j)) if (s) s] : i>=k || array[i]==d ? [] : concat([array[i]], island(array, d, i+1));
 
 // rotate array elements in a cyclic fashion (forward for positive n)
 function cyclic(array, n) = n==0 ? array : [let(k=len(array)) for (i=[n:n+k-1]) array[mod(i, k)]];
@@ -679,7 +685,7 @@ function escort2d(profile, d=1, loop=false, /*private*/ i=0, k, q) = d==0 ? prof
   let(k=k?k:len(profile), p0=profile[(i+k-1)%k], p1=profile[i%k], p2=profile[(i+1)%k])
   let(d0=d*unit([p1[1]-p0[1],p0[0]-p1[0]]), d1=d*unit([p2[1]-p1[1],p1[0]-p2[0]]))
   let(q0=p1+d0, q1=p1+d1, c=cross(unit(p0-p1), unit(p2-p1)), e=loop?k+1:k-1)
-  let(s=i==0?[if(!loop)q1]:i==e?[]:let(u=proj3(d1,p2-p1,d0)+proj3(d0,p0-p1,d1))sign(c)==sign(d)&&norm(u)<7*abs(d)?[p1+u]:norm(q0-q1)<$fs?[(q0+q1)/2]:c<0?ccw_path(q0,q1,po=p1):cw_path(q0,q1,po=p1))
+  let(s=i==0?[if(!loop)q1]:i==e?[]:let(u=proj3(d1,p2-p1,d0)+proj3(d0,p0-p1,d1))sign(c)==sign(d)&&norm(u)<abs(d)?[p1+u]:norm(q0-q1)<$fs?[(q0+q1)/2]:c<0?ccw_path(q0,q1,po=p1):cw_path(q0,q1,po=p1))
   concat(s, i==e?[if(!loop)q0]:escort2d(profile, d, loop, i+1, k, q));
 
 // inflate/deflate (offset) a profile (does not work well in some cases), f=pointiness threshold, tidy=cleanup range
@@ -689,10 +695,11 @@ function offset2d(profile, d=1, f=3, tidy=50, /*private*/ i=0, m, e, p) = d==0 ?
   let(s1=profile[(i+m-1)%m], s2=profile[i%m], u=unit([s2[1]-s1[1],s1[0]-s2[0]])*d, v1=s1+u, v2=s2+u)
   let(pp=i==0 ? [] : concat(p, [v1==v2 ? e[1] : colinear(e[1]-e[0], v2-v1) ? v1 : let(c=ifundef(meet2d(e, [v1,v2], true), v1)) abs(norm(c-s1)/d)>f ? s1*0.95+c*0.05 : c])) offset2d(profile, d, f, tidy, i+1, m, [v1,v2], pp);
 
-// produce a profile surrounding path, t=thickness, rounded=circular ends (loop=true causes a hack to create a "hole")
+// produce a profile surrounding path, t=[offset,-offset], rounded=circular ends, loop=true creates a hole
 function fence2d(path, t=1, rounded=true, s=0, loop=false, tidy) = len(path)<2 ? [] :
-  let(p=rectify(path), rounded=(rounded && t>$fs), s=min(s, t/2))
-  let(b1=escort2d(p, t/2, loop=loop), b2=escort2d(p, -t/2, loop=loop))
+  let(t1=is_list(t)?opt(t,0):t/2, t2=is_list(t)?opt(t,1):-t/2, tt=abs(t1-t2))
+  let(p=rectify(path), rounded=(rounded && tt>$fs), s=min(s, tt/2))
+  let(b1=escort2d(p, t1, loop=loop), b2=escort2d(p, t2, loop=loop))
   let(s1=close_loop(soften(b1, s, loop=loop), loop))
   let(s2=close_loop(reverse(soften(b2, s, loop=loop), loop=loop), loop))
   let(e1=!loop && rounded ? subarray(ccw_path(last(s2), s1[0], po=p[0]), 1, -2) : [])
@@ -1514,10 +1521,11 @@ module plot(profile, d=0.2, loop=false, color="gold", dot=true, dup=false, div=1
 }
 
 // chart a function on xy-plane
-module chart(fn, span=[0:0.1:1], scale=[1,1], d=0.2) {
+module chart(fn, span=[0:0.1:1], scale=1, d=0.2) {
   s0=opt(scale, 0, 1);
   s1=opt(scale, 1, 1);
-  plot([for (t=span) [t*s0,fn(t)*s1]], d=d);
+  ev = function(f, x) finite(x) ? let(y=f(x)) finite(y) ? [x*s0,y*s1] : undef : undef;
+  for (p=island([for (t=span) ev(fn, t)])) plot(p, d);
 }
 
 // alias for linear_extrude() with a default convexity (supports h<0 for extruding downwards)
