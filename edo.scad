@@ -590,7 +590,7 @@ function step2d(vectors, from=[0,0], i=0, m) = let(m=ifundef(m, len(vectors)), p
 function loop2d(paths=[], from) = let(c=fuse(concat2d(paths, from), loop=true)) snip(c, c[0]==c[len(c)-1]?1:0); 
 
 // extend a path by concatenating a scaled copy of itself across x-axis and/or y-axis (default is x-axis)
-function mirror2d(path, xs=-1, ys=1) = concat(path, [for (p=reverse(path)) [p[0]*xs,p[1]*ys]]);
+function mirror2d(path, xs=-1, ys=1) = let(e=path[len(path)-1]) concat(path, [for (p=reverse(path)) if (p!=e) [p[0]*xs,p[1]*ys]]);
 
 // remove points outside of y-range (l=low, h=high)
 function band2d(points, l, h) = [for (p=points) if (within(p[1], l, h)) p];
@@ -1212,9 +1212,10 @@ function morph_multiple(profiles, intervals, n, curved=false, z=0, i=0) =
 
 // from profile create a cookie-shape mesh of height h, vertical base height b, peak at origin, f=obesity
 function morph_cookie(profile, h, b=0, origin=[0,0], f=0) =
+  let(b=min(h-0.01, b), origin=origin + unit(centroid2d(profile))*0.01) // eliminate some non-manifold issues
   let(p=shift2d(profile, -origin), n=ceil(perimeter(avg(size2d(profile))/4, h-b)/4/$fs))
   let(m=[for (t=quanta(n, end=1, max=90+f)) force3d(shift2d(p*cos(t-f), origin), b+(h-b)*sin(min(90,t)))])
-  b<=0 ? m : prepend(m, force3d(shift2d(p, origin), 0));
+  b<=0 ? m : prepend(m, force3d(m[0], 0));
 
 // smooth vertical morphing for a series of profiles spaced with given intervals, see also fillet_sweep()
 // n=resolution, f=smoothness, d=alignment_axis (see rebase2d)
@@ -2523,7 +2524,7 @@ module clip_at(points) {
 }
 
 // replicate children in a radiating pattern on xy-plane
-// r=radius, n=number of copies, hide=omit copies at the end
+// r=radius or starting point, n=number of copies, hide=omit copies at the end
 // $index is passed to each child for their information
 module radiate(n, r=0, hide=0, spin=0) {
   if (n-hide>0) {
@@ -2860,6 +2861,24 @@ module weld(r=3, n) {
     }
   }
   if (!$preview) echo("welding... (may take a long while)");
+}
+
+// a fillet mounting socket, h=height, t=thickness, b=inner-base, r=fillet-sizes, n=normal-vector
+module mount(profile, h, t=1.6, b=2, r=[5,5], n=[0,0,1], debug=false) {
+  h = max(t, h);
+  r0 = opt(r, 0, 3);
+  r1 = min(h*0.7, opt(r, 1, 3));
+  mr = m3_rotate(n);
+  c0 = force3d(offset2d(profile, r0));
+  c1 = force3d(offset2d(profile, t+r0*0.15), r1);
+  c2 = force3d(offset2d(profile, t+r1*0.03), r1+(h-r1)/2);
+  c3 = force3d(offset2d(profile, t), h);
+  m0 = [c0, c1*mr, if (h-r1>3) c2*mr, c3*mr];
+  m1 = b>=h ? [] : [force3d(profile, h)*mr, force3d(profile, min(h, b))*mr];
+  if (debug)
+    plot_layers(concat(m0, m1));
+  else
+    layered_block(concat(morph3d(m0, e=0), m1));
 }
 
 // ====================================================================
