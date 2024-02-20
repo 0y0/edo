@@ -696,9 +696,9 @@ function offset2d(profile, d=1, f=3, tidy=50, /*private*/ i=0, m, e, p) = d==0 ?
   let(pp=i==0 ? [] : concat(p, [v1==v2 ? e[1] : colinear(e[1]-e[0], v2-v1) ? v1 : let(c=ifundef(meet2d(e, [v1,v2], true), v1)) abs(norm(c-s1)/d)>f ? s1*0.95+c*0.05 : c])) offset2d(profile, d, f, tidy, i+1, m, [v1,v2], pp);
 
 // produce a profile surrounding path, t=[offset,-offset], rounded=circular ends, loop=true creates a hole
-function fence2d(path, t=1, rounded=true, s=0, loop=false, tidy) = len(path)<2 ? [] :
+function fence2d(path, t=1, rounded=true, s=0, loop=false, rectify=true, tidy) = len(path)<2 ? [] :
   let(t1=is_list(t)?opt(t,0):t/2, t2=is_list(t)?opt(t,1):-t/2, tt=abs(t1-t2))
-  let(p=rectify(path), rounded=(rounded && tt>$fs), s=min(s, tt/2))
+  let(p=rectify?rectify(path):path, rounded=(rounded && tt>$fs), s=min(s, tt/2))
   let(b1=escort2d(p, t1, loop=loop), b2=escort2d(p, t2, loop=loop))
   let(s1=close_loop(soften(b1, s, loop=loop), loop))
   let(s2=close_loop(reverse(soften(b2, s, loop=loop), loop=loop), loop))
@@ -791,12 +791,12 @@ function puzzle_path(d=10, y=0) = [for (t=quanta(_fn(d/2), end=1)) [d/2,d+y]-puz
 function comma_path(d=10, f=0.5) = let(n=_fn2(d/2)) [for (t=quanta(n, end=1, max=1)) [cos(t*360),sin(t*360)]*(1-t+f*t)*d/2];
 function leaf_path(d, f) = let(f=ifundef(f, d*0.6)) [for (a=quanta(_fn(d/3), max=360)) [d*cos(a),f*sin(a)^3]/2];
 function cloud_path(w, d, n=11, f=3, seed) = let(d=ifundef(d, w), seed=rnd_seed(seed), p=shake2d(round_path(w/2, d/2, $fn=n), (w+d)/40, seed=seed), k=len(p)) loop2d([for (i=[0:k-1]) ccw_path(p[i], p[(i+1)%k], f)]);
-function pad_path(w, d, r=2, half=false) =
-  let(d=ifundef(d,w), r=max(0.01, min(r, min(w, d)/(half?1:2)-0.01)), w2=w/2, d2=d/2) concat(
-    ccw_path([w2,d2-r], [w2-r,d2], po=[w2-r,d2-r]),
-    ccw_path([-w2+r,d2], [-w2,d2-r], po=[-w2+r,d2-r]),
-    half ? [[-w/2,-d/2]] : ccw_path([-w2,-d2+r], [-w2+r,-d2], po=[-w2+r,-d2+r]),
-    half ? [[w/2,-d/2]] : ccw_path([w2-r,-d2], [w2,-d2+r], po=[w/2-r,-d/2+r])
+function pad_path(w, d, r=2, half=false) = let(d=ifundef(d,w), r=max(0, min(r, min(w, d)/2)))
+  let(w2=w/2, d2=d/2, sw=w-r*2<=0, sd=d-r*2<=0) concat(
+    ccw_path([w2,d2-r], [w2-r,d2], po=[w2-r,d2-r], snip=sw),
+    ccw_path([-w2+r,d2], [-w2,d2-r], po=[-w2+r,d2-r], snip=sd&&!half),
+    half ? [[-w/2,-d/2]] : ccw_path([-w2,-d2+r], [-w2+r,-d2], po=[-w2+r,-d2+r], snip=sw),
+    half ? [[w/2,-d/2]] : ccw_path([w2-r,-d2], [w2,-d2+r], po=[w/2-r,-d/2+r], snip=sd)
   );
 
 // ====================================================================
@@ -851,12 +851,12 @@ bridge_trace = function(t, f=0.1) let(r=(f*f+0.25)/f/2, x=t-0.5) [t,sqrt(r*r-x*x
 // ====================================================================
 
 function line_path(p, from=[0,0]) = [from,p];
-function ccw_path(p1, p2, f=2, i=0, po) = let(m=(p1+p2)/2, ov=orth2d(p2-p1), u=unit(ov))
-  let(o=m+(po?u*(po-m)*u:ov/f), r=norm(p1-o)) norm(p1-p2)<=2*$fs ? i==0 ? [p1,p2] : [p1] :
-  let(pm=o-r*u) concat(ccw_path(p1, pm, f, i+1, o), ccw_path(pm, p2, f, i+1, o), i==0?[p2]:[]);
-function cw_path(p1, p2, f=2, i=0, po) = let(m=(p1+p2)/2, ov=orth2d(p1-p2), u=unit(ov))
-  let(o=m+(po?u*(po-m)*u:ov/f), r=norm(p1-o)) norm(p1-p2)<=2*$fs ? i==0 ? [p1,p2] : [p1] :
-  let(pm=o-r*u) concat(cw_path(p1, pm, f, i+1, o), cw_path(pm, p2, f, i+1, o), i==0?[p2]:[]);
+function ccw_path(p1, p2, f=2, i=0, po, snip) = let(m=(p1+p2)/2, ov=orth2d(p2-p1), u=unit(ov))
+  let(o=m+(po?u*(po-m)*u:ov/f), r=norm(p1-o)) norm(p1-p2)<=2*$fs ? i>0||snip ? [p1] : [p1,p2] :
+  let(pm=o-r*u) concat(ccw_path(p1, pm, f, i+1, o), ccw_path(pm, p2, f, i+1, o), i>0||snip?[]:[p2]);
+function cw_path(p1, p2, f=2, i=0, po, snip) = let(m=(p1+p2)/2, ov=orth2d(p1-p2), u=unit(ov))
+  let(o=m+(po?u*(po-m)*u:ov/f), r=norm(p1-o)) norm(p1-p2)<=2*$fs ? i>0||snip ? [p1] : [p1,p2] :
+  let(pm=o-r*u) concat(cw_path(p1, pm, f, i+1, o), cw_path(pm, p2, f, i+1, o), i>0||snip?[]:[p2]);
 function sin_path(p1, p2, m=0.5, n=1) = let(v=p2-p1, ov=orth2d(v)*m, d=floor(norm(v)/2/$fs)) [for (t=quanta(d, end=1)) p1+t*v+sin(t*n*360)*ov];
 function cos_path(p1, p2, m=0.5, n=1) = let(v=p2-p1, ov=orth2d(v)*m, d=floor(norm(v)/2/$fs)) [for (t=quanta(d, end=1)) p1+t*v+cos(t*n*360)*ov];
 function peanut_path(p1, p2, w=10, f=1.2) = let(m=(p1+p2)/2, e=p1-p2, h=norm(e), c=e[0]/h, s=e[1]/h, v=h/2) [for (t=quanta(ceil(perimeter(v, w)/8/$fs)*2)) let(a=t*360) m + [cos(a)*(v+f*w/2),(2*sin(a)-sin(a)^5)*w/2] * [[c,s],[-s,c]]];
@@ -1179,6 +1179,9 @@ function rectify_layers(layers, invert=false) = let(k=len(layers)) k<2 || len(la
   let(a=layers[0], b=layers[1], u=a[1]-a[0], v=a[len(a)-1]-a[0], w=b[0]-a[0])
   reverse(layers, enable=xor(sign3v(u, v, w)<0, invert));
 
+// invert layers along z-axis
+function invert_layers(layers, h) = [for (p=layers) [for (i=[len(p)-1:-1:0]) [p[i][0],p[i][1],h-p[i][2]]]];
+
 // convert layers to slope lines and vice versa, d=dilution, s=twist
 function isomesh(layers, d=1, s=0) = let(n=len(layers[0])) [for (i=[0:d:n-1]) [for (j=[0:len(layers)-1]) layers[j][round(i+n+j*s)%n]]];
 
@@ -1407,7 +1410,7 @@ module shell(profile, h=2, t=1, bottom=0, inflate=0, r=2) {
   } 
 }
 
-// a wall based on profile, t could be negative (see also fillet_tray)
+// a wall enclosing the profile, negative t for inner wall, supports rounded top (see also fillet_tray)
 module wall(profile, h=20, t=1.6, flat=true) {
   if (t!=0 && h!=0) {
     tt = abs(t);
@@ -2673,7 +2676,7 @@ module fillet_pipe(d, h=2, t=1, xz=[2,2], convex=false, invert=false, m) {
         [force3d(c*(r-t)/r, min(h, xz[1]))],
         [force3d(c*(r-t)/r, max(0, -xz[0]))]
         ));
-  layered_block(invert ? invert3d(mesh, h) : mesh, loop=(r-t>=0.01));
+  layered_block(invert ? invert_layers(mesh, h) : mesh, loop=(r-t>=0.01));
 }
 
 // a solid cube of dimensions dm and fillet radius at most r
@@ -2878,7 +2881,7 @@ module mount(profile, h, t=1.6, b=2, r=[5,5], n=[0,0,1], debug=false) {
   if (debug)
     plot_layers(concat(m0, m1));
   else
-    layered_block(concat(morph3d(m0, e=0), m1));
+    layered_block(concat(morph3d(m0, e=0), m1), loop=b<=0);
 }
 
 // ====================================================================
