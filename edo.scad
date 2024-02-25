@@ -1380,10 +1380,11 @@ module pyramid(profile, h=5, inset=3, scale=0, origin) {
 // trace a thread along profile (negatively if children exists), r=tapering ratio (snap to points)
 module trace(profile, d=0.2, r=0, loop=false, fuse=true) {
   p = force3d(fuse ? fuse(profile, loop=loop) : profile);
-  s = r>0 ? [for (t=quanta(len(profile)-1, end=1)) [t,scale_guide(t, r)]] : undef;
+  q = r>0 ? resample(p, floor(path_length(p)/$fs), loop=false) : p;
+  s = r>0 ? [for (t=quanta(len(q)-1, end=1)) [t,scale_guide(t, r)]] : undef;
   difference() {
     if ($children) children();
-    sweep(ring_path(d), path=p, scaler=s, loop=loop);
+    sweep(ring_path(d), path=q, scaler=s, loop=loop);
   }
 }
 
