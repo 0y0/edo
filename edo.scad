@@ -590,7 +590,7 @@ function step2d(vectors, from=[0,0], i=0, m) = let(m=ifundef(m, len(vectors)), p
 function loop2d(paths=[], from) = let(c=fuse(concat2d(paths, from), loop=true)) snip(c, c[0]==c[len(c)-1]?1:0); 
 
 // extend a path by concatenating a scaled copy of itself across x-axis and/or y-axis (default is x-axis)
-function mirror2d(path, xs=-1, ys=1) = let(e=path[len(path)-1]) concat(path, [for (p=reverse(path)) if (p!=e) [p[0]*xs,p[1]*ys]]);
+function mirror2d(path, xs=-1, ys=1) = let(e=path[len(path)-1]) concat(path, [for (p=reverse(path)) let(q=[p[0]*xs,p[1]*ys]) if (q!=e) q]);
 
 // remove points outside of y-range (l=low, h=high)
 function band2d(points, l, h) = [for (p=points) if (within(p[1], l, h)) p];
