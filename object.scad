@@ -190,7 +190,10 @@ module cover_case(profile, h=25, d=8, t=2.8, s=1.2, b=2, g=0, m=0, sp=0, rise=fa
 module hinge_case(dm, t=3, r=0, f=0, e=0, g=0, view) {
   if (view==undef) {
     scatter(x=dm[0]+10) {
-      hinge_bin(dm, t, r, f, e, g);
+      union() {
+        hinge_bin(dm, t, r, f, e, g);
+        ascend(t-0.01) children();
+      }
       flipy(h=dm[2]+t*2) hinge_lid(dm, t, r, f, e);
     }
   }
@@ -199,16 +202,21 @@ module hinge_case(dm, t=3, r=0, f=0, e=0, g=0, view) {
     clip([dm[0]+t*3,dm[1]+t*3,dm[2]+t*3], cy=0) {
       color("wheat") hinge_bin(dm, t, r, f, e, g);
       color("pink") hinge_lid(dm, t, r, f, e);
+      ascend(t-0.01) children();
     }
     // 1 bin
-    hinge_bin(dm, t, r, f, e, g);
-    // lid
+    union() {
+      hinge_bin(dm, t, r, f, e, g);
+      ascend(t-0.01) children();
+    }
+    // 2 lid
     flipy(h=dm[2]+t*2) hinge_lid(dm, t, r, f, e);
-    // 2 closed
+    // 3 closed
     union() {
       color("wheat") hinge_bin(dm, t, r, f, e, g);
       color("pink") hinge_lid(dm, t, r, f, e);
-    }    
+      ascend(t-0.01) children();
+    }
   }
 }
 

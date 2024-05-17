@@ -1229,10 +1229,10 @@ function morph3d(profiles, f=5, e=2, loop=false, dup=false) = let(f=max(1,f)) is
 
 // ====================================================================
 // 3D sweep functions - note that they return the layers in reverse order of path for correct surface norms
-// sweep_profile - sweep a constant profile along path
-// sweep_pipe - sweep a constant profile along path maintaining a consistent cross-section area
-// sweep_wall - sweep a constant profile along path maintaining its vertical orientation
-// sweep_layers - sweep a set of 2D layers along path (no morphing)
+// sweep_profile - sweep a constant 2D profile along 3D path
+// sweep_pipe - sweep a constant 2D profile along 3D path maintaining a consistent cross-section area
+// sweep_wall - sweep a constant 2D profile along 3D path maintaining its vertical orientation
+// sweep_layers - sweep a set of layers along 3D path (no morphing)
 // ====================================================================
 
 function sweep_profile(profile, path, loop=false, s=0, i=0, a, m, t) = let(k=len(path)) i==k ? [] :
@@ -1327,6 +1327,9 @@ module punch2d(locs=[[0,0]], m=3) {
 // ====================================================================
 // 3D objects
 // ====================================================================
+
+// dummy module
+module nothing() {}
 
 // a tiny, invisible dot (tetrahedron)
 module dot(p=[0,0,0], r=0.001) { translate(p) polyhedron(tetra(r), tetra_faces(), convexity=10); }
