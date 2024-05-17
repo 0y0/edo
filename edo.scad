@@ -1415,14 +1415,14 @@ module shell(profile, h=2, t=1, bottom=0, inflate=0, r=2) {
 }
 
 // a wall enclosing the profile, negative t for inner wall, supports rounded top (see also fillet_tray)
-module wall(profile, h=20, t=1.6, flat=true) {
+module wall(profile, h=20, t=1.6, flat=true, loop=true) {
   if (t!=0 && h!=0) {
     tt = abs(t);
     hh = flat ? abs(h) : abs(h)-tt/2;
-    c = flat ? [-tt,0] : ccw_path([tt,0], [0,0], po=[tt/2,0]);
-    g = concat2d([[tt,0],[0,hh],c,[0,-hh]], [min(0,t),0]);
-    layered_block([for (i=g) force3d(offset2d(profile, i[0]), i[1])], loop=true);
-  }
+    f = flat ? [-tt,0] : ccw_path([tt,0], [0,0], po=[tt/2,0]);
+    c = concat2d([[tt,0],[0,hh],f], [min(0,t),0]);
+    sweep(c, profile, loop=loop);
+  } 
 }
 
 // a twisted shell enclosing the profile
