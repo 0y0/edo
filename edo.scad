@@ -883,11 +883,8 @@ function line(x, y, z) = [[0,0,if(z)0],[x,y,if(z)z]];
 // an arbitrary orthogonal vector of v
 function orth(v) = let(x=v[0], y=v[1], z=v[2]) x!=0 && y!=0 ? [y,-x,0] : x!=0 && z!=0 ? [z,0,-x] : y!=0 && z!=0 ? [0,z,-y] : [z, x, y];
 
-// an orthogonal vector of v wrt point u
-function orth2(v, u) = v-(u*v)/(v*v)*u;
-
-// project vector v onto vector u
-function proj(v, u) = (u*v)/(v*v)*u;
+// project vector v onto vector w
+function proj(v, w) = (v*w)/(w*w)*w;
 
 // project vector v onto a plane at origin defined by normal unit vector n
 function proj2(v, n) = v-(v*n)*n;
@@ -897,6 +894,9 @@ function proj3(v, d, n) = v-(v*n)/(d*n)*d;
 
 // project 3D points onto xy-plane wrt eye location [0,0,e]
 function proj3d(points, e) = [for (p=points) [p[0],p[1]]*e/(e-p[2])];
+
+// vector for v to reach the projection of v on vector w, i.e. v + perp(v, w) == proj(v, w)
+function perp(v, w) = (v*w)/(w*w)*w - v;
 
 // swap coordinates
 function swap_xy(points) = [for (p=points) p[2]==undef ? [p[1],p[0]] : [p[1],p[0],p[2]]];
@@ -1745,6 +1745,7 @@ module cyan(a=1) color("cyan", alpha=a) children();
 module gold(a=1) color("gold", alpha=a) children();
 module pink(a=1) color("pink", alpha=a) children();
 module black(a=1) color("black", alpha=a) children();
+module white(a=1) color("white", alpha=a) children();
 module yellow(a=1) color("yellow", alpha=a) children();
 module magenta(a=1) color("magenta", alpha=a) children();
 
